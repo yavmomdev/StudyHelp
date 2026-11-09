@@ -33,6 +33,19 @@ test('api key is stored encrypted and never exposed publicly', () => {
   assert.strictEqual(s.publicSettings().hasApiKey, true);
   s.saveSettings({ provider: 'ollama' }); // key survives unrelated changes
   assert.strictEqual(s.loadSettings().apiKey, 'sk-secret');
-  s.saveSettings({ clearApiKey: true });
+  s.saveSettings({ clear_apiKey: true });
   assert.strictEqual(s.publicSettings().hasApiKey, false);
+});
+
+test('gemini key is encrypted separately and clearable', () => {
+  const dir = tmp();
+  const secrets = { encrypt: (x) => 'enc:' + Buffer.from(x).toString('base64'), decrypt: (x) => Buffer.from(x.slice(4), 'base64').toString() };
+  const s = createStore(dir, secrets);
+  s.saveSettings({ geminiApiKey: 'AIza-secret', apiKey: 'sk-other' });
+  assert.ok(!fs.readFileSync(path.join(dir, 'settings.json'), 'utf8').includes('AIza-secret'));
+  const pub = s.publicSettings();
+  assert.strictEqual(pub.geminiApiKey, undefined);
+  assert.ok(pub.hasGeminiKey && pub.hasApiKey);
+  s.saveSettings({ clear_geminiApiKey: true });
+  assert.ok(!s.publicSettings().hasGeminiKey && s.publicSettings().hasApiKey);
 });

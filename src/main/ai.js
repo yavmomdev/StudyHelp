@@ -17,7 +17,9 @@ async function postJSON(url, headers, body, label) {
     } catch {
       /* keep raw */
     }
-    if (res.status === 401) msg = 'Invalid API key. Check it in Settings.';
+    if (res.status === 401 || (res.status === 400 && /api key/i.test(msg)) || (res.status === 403 && /key|permission|denied/i.test(msg)))
+      msg = 'Invalid or unauthorised API key. Check it in Settings.';
+    if (res.status === 429) msg = 'Rate limit or free quota reached. Wait a bit, or pick a lighter/faster model in Settings.';
     throw new Error(`${label} error ${res.status}: ${msg}`);
   }
   return JSON.parse(text);
@@ -42,6 +44,28 @@ async function complete(settings, { system, prompt, images = [] }) {
       'Ollama'
     );
     return data.message?.content || '';
+  }
+
+  if (settings.provider === 'gemini') {
+    if (!settings.geminiApiKey) throw new Error('No Gemini API key yet. Add it in Settings (free key from aistudio.google.com).');
+    const parts = [
+      ...images.map((i) => ({ inline_data: { mime_type: i.mediaType, data: i.data } })),
+      { text: prompt },
+    ];
+    const data = await postJSON(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(settings.geminiModel)}:generateContent`,
+      { 'x-goog-api-key': settings.geminiApiKey },
+      {
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts }],
+        generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 32000, temperature: 0.3 },
+      },
+      'Gemini API'
+    );
+    const cand = data.candidates?.[0];
+    if (!cand) throw new Error(`Gemini returned no answer${data.promptFeedback?.blockReason ? ` (blocked: ${data.promptFeedback.blockReason})` : ''}.`);
+    // "thought" parts are the model's reasoning summary, not the answer.
+    return (cand.content?.parts || []).filter((p) => !p.thought && typeof p.text === 'string').map((p) => p.text).join('');
   }
 
   if (!settings.apiKey) throw new Error('No API key yet. Add your Anthropic API key in Settings (or switch to Ollama for local models).');

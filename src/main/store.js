@@ -5,10 +5,15 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+// Secrets are stored encrypted as <name>Enc and never returned to the UI.
+const SECRETS = ['apiKey', 'geminiApiKey'];
+
 const DEFAULT_SETTINGS = {
-  provider: 'anthropic', // 'anthropic' | 'ollama'
+  provider: 'anthropic', // 'anthropic' | 'gemini' | 'ollama'
   anthropicModel: 'claude-sonnet-5-5',
   apiKey: '',
+  geminiModel: 'gemini-3.5-flash',
+  geminiApiKey: '',
   ollamaUrl: 'http://localhost:11434',
   ollamaModel: 'llama3.1',
   language: 'auto', // 'auto' = same language as the material
@@ -95,29 +100,36 @@ function createStore(baseDir, secrets = { encrypt: (s) => s, decrypt: (s) => s }
       /* first run */
     }
     const s = { ...DEFAULT_SETTINGS, ...raw };
-    s.apiKey = raw.apiKeyEnc ? secrets.decrypt(raw.apiKeyEnc) : '';
-    delete s.apiKeyEnc;
+    for (const k of SECRETS) {
+      s[k] = raw[`${k}Enc`] ? secrets.decrypt(raw[`${k}Enc`]) : '';
+      delete s[`${k}Enc`];
+    }
     return s;
   }
 
   function saveSettings(patch) {
-    const cur = loadSettings();
-    const next = { ...cur };
+    const next = { ...loadSettings() };
     for (const k of Object.keys(DEFAULT_SETTINGS)) {
-      if (k === 'apiKey') continue;
+      if (SECRETS.includes(k)) continue;
       if (patch[k] !== undefined) next[k] = String(patch[k]);
     }
-    if (typeof patch.apiKey === 'string' && patch.apiKey !== '') next.apiKey = patch.apiKey.trim();
-    if (patch.clearApiKey) next.apiKey = '';
-    const { apiKey, ...rest } = next;
-    writeAtomic(settingsFile, { ...rest, apiKeyEnc: apiKey ? secrets.encrypt(apiKey) : '' });
+    for (const k of SECRETS) {
+      if (typeof patch[k] === 'string' && patch[k] !== '') next[k] = patch[k].trim();
+      if (patch[`clear_${k}`]) next[k] = '';
+    }
+    const out = { ...next };
+    for (const k of SECRETS) {
+      out[`${k}Enc`] = next[k] ? secrets.encrypt(next[k]) : '';
+      delete out[k];
+    }
+    writeAtomic(settingsFile, out);
     return next;
   }
 
   // What the renderer may see: never the key itself.
   function publicSettings() {
-    const { apiKey, ...rest } = loadSettings();
-    return { ...rest, hasApiKey: !!apiKey };
+    const { apiKey, geminiApiKey, ...rest } = loadSettings();
+    return { ...rest, hasApiKey: !!apiKey, hasGeminiKey: !!geminiApiKey };
   }
 
   return { saveItem, getItem, listItems, deleteItems, addAttempt, loadSettings, saveSettings, publicSettings };

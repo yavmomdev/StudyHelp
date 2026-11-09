@@ -76,3 +76,31 @@ test('unparseable model reply is retried once then fails clearly', async () => {
   await assert.rejects(jobs.createLesson({ files: [], text: 'x' }, ctx), /unreadable/);
   assert.strictEqual(n, 2);
 });
+
+test('gemini provider: right URL/header/body, thought parts ignored, images inline', async () => {
+  const store = createStore(tmp());
+  const ctx = { store, settings: { ...store.loadSettings(), provider: 'gemini', geminiApiKey: 'AIza', geminiModel: 'gemini-3.5-flash' }, onProgress() {} };
+  const png = path.join(tmp(), 'n.png');
+  fs.writeFileSync(png, Buffer.from('89504e470d0a1a0a', 'hex'));
+  const seen = [];
+  global.fetch = async (url, init) => {
+    seen.push({ url, headers: init.headers, body: JSON.parse(init.body) });
+    const answer = JSON.stringify({ title: 'T', overview: 'o', keyPoints: ['k'], sections: [{ heading: 'h', content: 'c' }] });
+    return { ok: true, status: 200, text: async () => JSON.stringify({ candidates: [{ content: { parts: [{ thought: true, text: 'thinking...' }, { text: answer }] } }] }) };
+  };
+  const lesson = await jobs.createLesson({ files: [{ path: png }], text: 'hello' }, ctx);
+  assert.strictEqual(lesson.title, 'T');
+  assert.ok(seen[0].url.endsWith('/models/gemini-3.5-flash:generateContent'));
+  assert.strictEqual(seen[0].headers['x-goog-api-key'], 'AIza');
+  assert.ok(!seen[0].url.includes('AIza'));
+  assert.strictEqual(seen[0].body.contents[0].parts[0].inline_data.mime_type, 'image/png');
+  assert.strictEqual(seen[0].body.generationConfig.responseMimeType, 'application/json');
+});
+
+test('gemini without a key and quota errors are explained', async () => {
+  const store = createStore(tmp());
+  const base = { ...store.loadSettings(), provider: 'gemini' };
+  await assert.rejects(jobs.createLesson({ text: 'x' }, { store, settings: base, onProgress() {} }), /Gemini API key/);
+  global.fetch = async () => ({ ok: false, status: 429, text: async () => JSON.stringify({ error: { message: 'quota' } }) });
+  await assert.rejects(jobs.createLesson({ text: 'x' }, { store, settings: { ...base, geminiApiKey: 'k' }, onProgress() {} }), /free quota/);
+});

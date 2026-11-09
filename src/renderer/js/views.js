@@ -47,11 +47,11 @@
   async function setupBanner() {
     const s = await SH.call(api().settings.get());
     if (!s) return null;
-    const missing = s.provider === 'anthropic' && !s.hasApiKey;
+    const missing = (s.provider === 'anthropic' && !s.hasApiKey) || (s.provider === 'gemini' && !s.hasGeminiKey);
     return missing
-      ? h('div', { class: 'callout' }, 'To generate content, add your Anthropic API key in ',
+      ? h('div', { class: 'callout' }, 'To generate content, add your API key in ',
           h('a', { href: '#', style: 'color:var(--accent)', onClick: (e) => { e.preventDefault(); SH.go('settings'); } }, 'Settings'),
-          ' — or switch to a local Ollama model there.')
+          ' — Google Gemini has a free tier, or use a local Ollama model.')
       : null;
   }
 
@@ -262,7 +262,8 @@
     const f = (name, label, type = 'text', placeholder = '') =>
       h('label', { class: 'field' }, h('span', {}, label), h('input', { type, name, value: s[name] ?? '', placeholder }));
     const provider = h('select', { name: 'provider' },
-      h('option', { value: 'anthropic', selected: s.provider === 'anthropic' || null }, 'Anthropic API (cloud, best quality)'),
+      h('option', { value: 'gemini', selected: s.provider === 'gemini' || null }, 'Google Gemini (cloud, free tier)'),
+      h('option', { value: 'anthropic', selected: s.provider === 'anthropic' || null }, 'Anthropic API (cloud, paid)'),
       h('option', { value: 'ollama', selected: s.provider === 'ollama' || null }, 'Ollama (local, private, free)'));
     const key = h('input', { type: 'password', name: 'apiKey', placeholder: s.hasApiKey ? '•••••••• saved — type to replace' : 'sk-ant-…' });
     const model = f('anthropicModel', 'Anthropic model');
@@ -272,12 +273,27 @@
       ...[['auto', 'Same as the material'], ['English', 'English'], ['Bulgarian', 'Bulgarian']].map(([v, l]) =>
         h('option', { value: v, selected: s.language === v || null }, l)));
 
+    const GEMINI_MODELS = [
+      ['gemini-3.5-flash', 'Gemini 3.5 Flash: balanced, thinking (recommended)'],
+      ['gemini-2.5-pro', 'Gemini 2.5 Pro: deepest thinking, slowest, tightest free limit'],
+      ['gemini-3.1-flash-lite', 'Gemini 3.1 Flash-Lite: fastest, lightest'],
+      ['gemini-2.5-flash', 'Gemini 2.5 Flash: fast thinking'],
+    ];
+    if (!GEMINI_MODELS.some(([v]) => v === s.geminiModel)) GEMINI_MODELS.push([s.geminiModel, s.geminiModel]);
+    const gKey = h('input', { type: 'password', name: 'geminiApiKey', placeholder: s.hasGeminiKey ? '•••••••• saved — type to replace' : 'AIza…' });
+    const gModel = h('select', { name: 'geminiModel' }, ...GEMINI_MODELS.map(([v, l]) => h('option', { value: v, selected: s.geminiModel === v || null }, l)));
+    const gemini = h('div', {},
+      h('label', { class: 'field' }, h('span', {}, 'Gemini API key'), gKey),
+      h('label', { class: 'field' }, h('span', {}, 'Gemini model'), gModel),
+      h('p', { class: 'muted' }, 'Free key: aistudio.google.com → Get API key. Free-tier limits apply and Google may use free-tier prompts to improve its products, so avoid private material.'),
+      s.hasGeminiKey ? h('button', { class: 'btn small danger', style: 'margin-bottom:14px', onClick: async () => {
+        await SH.call(api().settings.set({ clear_geminiApiKey: true })); SH.toast('Gemini key removed', 'ok'); SH.go('settings'); } }, 'Remove saved Gemini key') : null);
     const cloud = h('div', {}, h('label', { class: 'field' }, h('span', {}, 'Anthropic API key'), key), model,
       s.hasApiKey ? h('button', { class: 'btn small danger', style: 'margin-bottom:14px', onClick: async () => {
-        await SH.call(api().settings.set({ clearApiKey: true })); SH.toast('API key removed', 'ok'); SH.go('settings'); } }, 'Remove saved key') : null);
+        await SH.call(api().settings.set({ clear_apiKey: true })); SH.toast('API key removed', 'ok'); SH.go('settings'); } }, 'Remove saved key') : null);
     const local = h('div', {}, ollamaUrl, ollamaModel,
       h('p', { class: 'muted' }, 'Local models read pasted text, PDFs and Word files. Images are read with OCR (the language data downloads once).'));
-    const sync = () => { cloud.classList.toggle('hidden', provider.value !== 'anthropic'); local.classList.toggle('hidden', provider.value !== 'ollama'); };
+    const sync = () => { cloud.classList.toggle('hidden', provider.value !== 'anthropic'); gemini.classList.toggle('hidden', provider.value !== 'gemini'); local.classList.toggle('hidden', provider.value !== 'ollama'); };
     provider.addEventListener('change', sync);
     sync();
 
@@ -285,12 +301,13 @@
     main.replaceChildren(h('div', { class: 'page' },
       ...header('Settings', 'Your lessons and history are stored only on this computer.'),
       h('div', { class: 'card' },
-        h('label', { class: 'field' }, h('span', {}, 'AI provider'), provider), cloud, local,
+        h('label', { class: 'field' }, h('span', {}, 'AI provider'), provider), gemini, cloud, local,
         h('label', { class: 'field' }, h('span', {}, 'Output language'), lang),
-        h('p', { class: 'muted' }, 'With the Anthropic API, your material is sent to Anthropic to be processed. With Ollama nothing leaves your computer.'),
+        h('p', { class: 'muted' }, 'With Gemini or the Anthropic API, your material is sent to that company to be processed. With Ollama nothing leaves your computer.'),
         h('button', { class: 'btn primary', onClick: async () => {
-          const patch = { provider: provider.value, language: lang.value, anthropicModel: val(model), ollamaUrl: val(ollamaUrl), ollamaModel: val(ollamaModel) };
+          const patch = { provider: provider.value, language: lang.value, anthropicModel: val(model), geminiModel: gModel.value, ollamaUrl: val(ollamaUrl), ollamaModel: val(ollamaModel) };
           if (key.value.trim()) patch.apiKey = key.value.trim();
+          if (gKey.value.trim()) patch.geminiApiKey = gKey.value.trim();
           if (await SH.call(api().settings.set(patch))) { SH.toast('Settings saved', 'ok'); SH.go('settings'); }
         } }, 'Save'))));
   };

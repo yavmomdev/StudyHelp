@@ -12,7 +12,7 @@ Runs locally as a desktop app (Electron). No server, no account. Your history li
 | **Test** | Three sources: **from files**, **from a previous lesson**, or **analyze my test**: upload a test you already took and get the rules you broke, your mistakes explained, and similar practice questions. Every test comes in 3 variants: **normal test**, **flash cards**, **blurry notes** (fill in the key terms only; verbs and filler words are never blanked). |
 | **Revision** | Pick several lessons from history and/or send revision notes. Get one combined summary and a revision test (same 3 variants). |
 | **History** | All lessons, tests and revisions with search and filters, attempt counts, **Select all** + **Delete selected**. |
-| **Settings** | Choose the AI: Anthropic API (cloud) or Ollama (fully local). Output language. |
+| **Settings** | Choose the AI: Google Gemini (free tier), Anthropic API (paid) or Ollama (fully local). Output language. |
 
 ## Run it
 
@@ -23,10 +23,14 @@ npm install
 npm start
 ```
 
-Then open **Settings** and either paste an Anthropic API key, or select **Ollama** (install [Ollama](https://ollama.com), then e.g. `ollama pull llama3.1`).
+Then open **Settings** and pick a provider:
 
-- API key is stored encrypted with your OS keychain when available and never sent to the UI.
-- With the Anthropic API your material is sent to Anthropic for processing; with Ollama nothing leaves your computer.
+- **Google Gemini (free tier, easiest start):** get a free key at [aistudio.google.com](https://aistudio.google.com) (Get API key). Models: *Gemini 3.5 Flash* (balanced, thinking; default), *Gemini 2.5 Pro* (deepest thinking, slowest, tightest free limit), *Gemini 3.1 Flash-Lite* (fastest). Free-tier limits apply and Google may use free-tier prompts to improve its products.
+- **Anthropic API:** paste an API key (pay-as-you-go).
+- **Ollama:** local and private; select **Ollama** (install [Ollama](https://ollama.com), then e.g. `ollama pull llama3.1`).
+
+- API keys are stored encrypted with your OS keychain when available and never sent to the UI.
+- With Gemini or the Anthropic API your material is sent to that company for processing; with Ollama nothing leaves your computer.
 - Local models read images through OCR (language data downloads once). Scanned PDFs: export the pages as images.
 
 Build an installer: `npm run dist`.  Run the tests: `npm test`.
