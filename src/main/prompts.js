@@ -34,15 +34,16 @@ const QUESTION_SPEC = `"questions": [ { "question": string, "options": [4 string
 const TEST_SPEC = `
 ${QUESTION_SPEC},
 "flashcards": [ { "front": string (term/question), "back": string (answer, concise) } ],
-"notes": string (a condensed plain-text version of the material, 250-600 words, keeping its key terms EXACTLY as written),
+"notes": string (a condensed plain-text version of the material, 250-600 words, in short complete sentences, keeping its key terms EXACTLY as written),
 "blurryTerms": [ strings ]`;
 
-const BLURRY_RULES = `Rules for "blurryTerms" (the words the student must fill in on the blurred notes):
-- 12-25 items. Each must appear VERBATIM (same spelling and inflection) inside "notes".
-- Choose ONLY terminology, names, dates, numbers, definitions' key words and key concepts that are central to the lesson.
-- NEVER choose verbs, adjectives, conjunctions, prepositions or filler words, and never words that can be guessed from grammar alone.
-- Mostly 1-3 words; up to 3 items may be a short key phrase (max 8 words) when a whole idea should be recalled.
-- Do not pick two items that overlap each other.`;
+const BLURRY_RULES = `Rules for "notes" and "blurryTerms" (the blurred-notes exercise: the student fills in ONE hidden word per sentence):
+- Write "notes" as short, clear, complete sentences, one idea per sentence.
+- "blurryTerms": 10-20 items (fewer if the notes are short). Each item is exactly ONE word (never a phrase), spelled exactly as in "notes".
+- At most ONE item per sentence, so choose each from a different sentence.
+- Pick only key terminology: a technical term, name, date, number or central concept that the sentence is about. The student must be able to work out the missing word from the rest of the sentence, so choose a word whose removal leaves the sentence clear and answerable.
+- NEVER pick verbs, adjectives, adverbs, conjunctions, prepositions, pronouns or filler words, and never a word that would make the sentence ambiguous or have several equally correct answers.
+- Prefer a term that appears only once in the notes.`;
 
 const LESSON_SPEC = `{
  "title": string,

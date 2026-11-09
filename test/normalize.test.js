@@ -29,3 +29,8 @@ test('graded tests keep mistakes and rules', () => {
   assert.strictEqual(t.mistakes.length, 1);
   assert.strictEqual(t.rules.length, 1);
 });
+
+test('blurry terms: multi-word phrases and same-sentence terms are dropped', () => {
+  const t = N.normTest({ notes: 'The nucleus holds DNA. The cell wall protects plants.', blurryTerms: ['nucleus', 'DNA', 'cell wall', 'plants'] });
+  assert.deepStrictEqual(t.blurryTerms, ['nucleus', 'plants']);
+});

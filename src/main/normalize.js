@@ -1,6 +1,8 @@
 'use strict';
 // Model output is untrusted: coerce it into the exact shapes the UI expects and drop anything broken.
 
+const Blurry = require('../renderer/js/blurry.js');
+
 const str = (v) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim());
 const arr = (v) => (Array.isArray(v) ? v : []);
 
@@ -70,20 +72,9 @@ function normDiagrams(list) {
     .filter((d) => d.nodes.length >= 2);
 }
 
-// Keep only blur terms that really occur in the notes (case-insensitive) and don't duplicate each other.
+// Blur terms: single words only, max one per sentence, and they must really occur in the notes.
 function pickBlurryTerms(terms, notes) {
-  const lower = notes.toLowerCase();
-  const seen = new Set();
-  const out = [];
-  for (const t of arr(terms).map(str)) {
-    const k = t.toLowerCase();
-    if (t.length < 2 || seen.has(k) || !lower.includes(k)) continue;
-    seen.add(k);
-    // Use the spelling that is actually in the notes.
-    const at = lower.indexOf(k);
-    out.push(notes.slice(at, at + t.length));
-  }
-  return out;
+  return Blurry.pickTerms(notes, arr(terms).map(str));
 }
 
 function normTestPack(raw) {
