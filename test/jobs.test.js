@@ -104,3 +104,35 @@ test('gemini without a key and quota errors are explained', async () => {
   global.fetch = async () => ({ ok: false, status: 429, text: async () => JSON.stringify({ error: { message: 'quota' } }) });
   await assert.rejects(jobs.createLesson({ text: 'x' }, { store, settings: { ...base, geminiApiKey: 'k' }, onProgress() {} }), /free quota/);
 });
+
+test('gemini 503: retries, then falls back to a lighter model', async () => {
+  const store = createStore(tmp());
+  const ctx = { store, settings: { ...store.loadSettings(), provider: 'gemini', geminiApiKey: 'k', geminiModel: 'gemini-3.5-flash', _retryDelays: [1, 1] }, onProgress() {} };
+  const ok = JSON.stringify({ title: 'T', keyPoints: ['k'], sections: [{ heading: 'h', content: 'c' }] });
+  const urls = [];
+  global.fetch = async (url) => {
+    urls.push(url);
+    if (url.includes('gemini-3.5-flash:')) return { ok: false, status: 503, text: async () => JSON.stringify({ error: { message: 'high demand' } }) };
+    return { ok: true, status: 200, text: async () => JSON.stringify({ candidates: [{ content: { parts: [{ text: ok }] } }] }) };
+  };
+  const lesson = await jobs.createLesson({ text: 'x' }, ctx);
+  assert.strictEqual(lesson.title, 'T');
+  assert.strictEqual(urls.filter((u) => u.includes('3.5-flash:')).length, 3); // 1 try + 2 retries
+  assert.ok(urls.at(-1).includes('gemini-3.1-flash-lite'));
+});
+
+test('gemini 503 that recovers on retry stays on the chosen model; bad key is not retried', async () => {
+  const store = createStore(tmp());
+  const base = { ...store.loadSettings(), provider: 'gemini', geminiApiKey: 'k', geminiModel: 'gemini-2.5-pro', _retryDelays: [1] };
+  const ok = JSON.stringify({ title: 'T', keyPoints: ['k'], sections: [{ heading: 'h', content: 'c' }] });
+  let n = 0;
+  global.fetch = async () => (++n === 1
+    ? { ok: false, status: 503, text: async () => '{}' }
+    : { ok: true, status: 200, text: async () => JSON.stringify({ candidates: [{ content: { parts: [{ text: ok }] } }] }) });
+  await jobs.createLesson({ text: 'x' }, { store, settings: base, onProgress() {} });
+  assert.strictEqual(n, 2);
+  n = 0;
+  global.fetch = async () => (n++, { ok: false, status: 400, text: async () => JSON.stringify({ error: { message: 'API key not valid' } }) });
+  await assert.rejects(jobs.createLesson({ text: 'x' }, { store, settings: base, onProgress() {} }), /Invalid or unauthorised/);
+  assert.strictEqual(n, 1);
+});

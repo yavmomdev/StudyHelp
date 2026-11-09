@@ -20,12 +20,65 @@ async function postJSON(url, headers, body, label) {
     if (res.status === 401 || (res.status === 400 && /api key/i.test(msg)) || (res.status === 403 && /key|permission|denied/i.test(msg)))
       msg = 'Invalid or unauthorised API key. Check it in Settings.';
     if (res.status === 429) msg = 'Rate limit or free quota reached. Wait a bit, or pick a lighter/faster model in Settings.';
-    throw new Error(`${label} error ${res.status}: ${msg}`);
+    const err = new Error(`${label} error ${res.status}: ${msg}`);
+    err.status = res.status;
+    if (res.status === 429) err.message = msg;
+    throw err;
   }
   return JSON.parse(text);
 }
 
-async function complete(settings, { system, prompt, images = [] }) {
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Cheaper models to fall back to when the chosen Gemini model is overloaded.
+const GEMINI_FALLBACKS = ['gemini-3.1-flash-lite', 'gemini-2.5-flash'];
+
+async function geminiOnce(settings, model, { system, prompt, images }) {
+  if (!settings.geminiApiKey) throw new Error('No Gemini API key yet. Add it in Settings (free key from aistudio.google.com).');
+  const parts = [
+    ...images.map((i) => ({ inline_data: { mime_type: i.mediaType, data: i.data } })),
+    { text: prompt },
+  ];
+  const data = await postJSON(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    { 'x-goog-api-key': settings.geminiApiKey },
+    {
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: 'user', parts }],
+      generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 32000, temperature: 0.3 },
+    },
+    'Gemini API'
+  );
+  const cand = data.candidates?.[0];
+  if (!cand) throw new Error(`Gemini returned no answer${data.promptFeedback?.blockReason ? ` (blocked: ${data.promptFeedback.blockReason})` : ''}.`);
+  // "thought" parts are the model's reasoning summary, not the answer.
+  return (cand.content?.parts || []).filter((p) => !p.thought && typeof p.text === 'string').map((p) => p.text).join('');
+}
+
+// 503/500 ("high demand") are temporary: retry with a pause, then try lighter models.
+async function completeGemini(settings, req, onProgress) {
+  const delays = settings._retryDelays || [2000, 5000, 10000];
+  const models = [settings.geminiModel, ...GEMINI_FALLBACKS.filter((m) => m !== settings.geminiModel)];
+  let lastErr;
+  for (const [mi, model] of models.entries()) {
+    for (let attempt = 0; attempt <= delays.length; attempt++) {
+      try {
+        return await geminiOnce(settings, model, req);
+      } catch (e) {
+        lastErr = e;
+        if (![500, 502, 503, 504].includes(e.status)) throw e; // real errors (bad key, quota…) are not retried
+        if (attempt < delays.length) {
+          onProgress?.(`${model} is busy, retrying (${attempt + 1}/${delays.length})…`);
+          await sleep(delays[attempt]);
+        }
+      }
+    }
+    if (mi < models.length - 1) onProgress?.(`${model} is overloaded, switching to ${models[mi + 1]}…`);
+  }
+  throw new Error(`Gemini is overloaded right now (${lastErr.message}). Try again in a few minutes.`);
+}
+
+async function complete(settings, { system, prompt, images = [] }, onProgress) {
   if (settings.provider === 'ollama') {
     const base = settings.ollamaUrl.replace(/\/+$/, '');
     const data = await postJSON(
@@ -46,27 +99,7 @@ async function complete(settings, { system, prompt, images = [] }) {
     return data.message?.content || '';
   }
 
-  if (settings.provider === 'gemini') {
-    if (!settings.geminiApiKey) throw new Error('No Gemini API key yet. Add it in Settings (free key from aistudio.google.com).');
-    const parts = [
-      ...images.map((i) => ({ inline_data: { mime_type: i.mediaType, data: i.data } })),
-      { text: prompt },
-    ];
-    const data = await postJSON(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(settings.geminiModel)}:generateContent`,
-      { 'x-goog-api-key': settings.geminiApiKey },
-      {
-        systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts }],
-        generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 32000, temperature: 0.3 },
-      },
-      'Gemini API'
-    );
-    const cand = data.candidates?.[0];
-    if (!cand) throw new Error(`Gemini returned no answer${data.promptFeedback?.blockReason ? ` (blocked: ${data.promptFeedback.blockReason})` : ''}.`);
-    // "thought" parts are the model's reasoning summary, not the answer.
-    return (cand.content?.parts || []).filter((p) => !p.thought && typeof p.text === 'string').map((p) => p.text).join('');
-  }
+  if (settings.provider === 'gemini') return completeGemini(settings, { system, prompt, images }, onProgress);
 
   if (!settings.apiKey) throw new Error('No API key yet. Add your Anthropic API key in Settings (or switch to Ollama for local models).');
   const content = [
@@ -86,7 +119,7 @@ async function complete(settings, { system, prompt, images = [] }) {
 async function completeJSON(settings, req, onProgress) {
   let lastErr;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const text = await complete(settings, req);
+    const text = await complete(settings, req, onProgress);
     try {
       return parseJSON(text);
     } catch (e) {
