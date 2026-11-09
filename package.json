@@ -1,0 +1,29 @@
+{
+  "name": "studyhelp",
+  "version": "0.1.0",
+  "description": "Desktop study assistant: turns lessons and tests into summaries, tests, flash cards and blurry notes.",
+  "main": "src/main/main.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"test/*.test.js\"",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "mammoth": "^1.13.0",
+    "pdf-parse": "1.1.1",
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "dev.yavmom.studyhelp",
+    "productName": "StudyHelp",
+    "files": ["src/**/*", "package.json"],
+    "win": { "target": "nsis" },
+    "mac": { "target": "dmg" },
+    "linux": { "target": "AppImage" }
+  }
+}
