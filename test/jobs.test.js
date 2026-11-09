@@ -40,7 +40,7 @@ test('lesson -> test from lesson -> revision, end to end with a mocked API', asy
   calls = mockFetch(pack);
   const test_ = await jobs.createTest({ mode: 'lesson', lessonId: lesson.id }, ctx);
   assert.strictEqual(test_.type, 'test');
-  assert.deepStrictEqual(test_.data.blurryTerms, ['mitochondria', 'ATP', 'Ribosomes']);
+  assert.deepStrictEqual(test_.data.blurryTerms, ['mitochondria', 'Ribosomes']); // ATP shares a sentence with mitochondria
   assert.ok(calls[0].body.messages[0].content[0].text.includes('About cells'));
 
   const rev = await jobs.createRevision({ lessonIds: [lesson.id], text: 'extra notes' }, ctx);

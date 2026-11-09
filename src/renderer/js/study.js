@@ -93,13 +93,24 @@
     function draw() {
       if (i >= qs.length) return result();
       const q = qs[i];
-      let locked = false;
+      // Coming back to an answered question: in instant mode it stays revealed, in exam mode the pick stays selected.
+      let locked = !!opts.instant && picks[i] != null;
       const optEls = q.options.map((o, idx) =>
         h('button', { class: 'opt', onClick: () => choose(idx) }, o)
       );
-      const nextBtn = h('button', { class: 'btn primary', disabled: true, onClick: () => { i++; draw(); } },
+      const nextBtn = h('button', { class: 'btn primary', disabled: picks[i] == null, onClick: () => { i++; draw(); } },
         i === qs.length - 1 ? 'Finish' : 'Next');
+      const backBtn = h('button', { class: 'btn', disabled: i === 0, onClick: () => { i--; draw(); } }, '← Back');
       const explain = h('div');
+
+      function reveal(idx) {
+        optEls.forEach((el, k) => {
+          el.disabled = true;
+          if (k === q.answerIndex) el.classList.add('right');
+          else if (k === idx) el.classList.add('wrong');
+        });
+        if (q.explanation) explain.replaceChildren(h('div', { class: 'explain' }, q.explanation));
+      }
 
       function choose(idx) {
         if (locked) return;
@@ -107,14 +118,14 @@
         optEls.forEach((el, k) => el.classList.toggle('picked', k === idx));
         if (opts.instant) {
           locked = true;
-          optEls.forEach((el, k) => {
-            el.disabled = true;
-            if (k === q.answerIndex) el.classList.add('right');
-            else if (k === idx) el.classList.add('wrong');
-          });
-          if (q.explanation) explain.replaceChildren(h('div', { class: 'explain' }, q.explanation));
+          reveal(idx);
         }
         nextBtn.disabled = false;
+      }
+
+      if (picks[i] != null) {
+        if (opts.instant) reveal(picks[i]);
+        else optEls[picks[i]].classList.add('picked');
       }
 
       box.replaceChildren(
@@ -122,7 +133,7 @@
         h('div', { class: 'muted', style: 'margin-bottom:6px' }, `Question ${i + 1} of ${qs.length}`),
         h('p', { class: 'q-text' }, q.question),
         ...optEls, explain,
-        h('div', { class: 'row', style: 'justify-content:flex-end;margin-top:14px' }, nextBtn)
+        h('div', { class: 'row spread', style: 'margin-top:14px' }, backBtn, nextBtn)
       );
     }
 
@@ -199,7 +210,7 @@
 
   // ---------- blurry notes ----------
   SH.blurry = (data, opts = {}) => {
-    const parts = Blurry.segment(data.notes, data.blurryTerms);
+    const parts = Blurry.segment(data.notes, Blurry.pickTerms(data.notes, data.blurryTerms));
     const blanks = [];
     const echoes = [];
     const body = h('div', { class: 'blurry' });
@@ -258,7 +269,7 @@
     }
 
     return h('div', {},
-      h('p', { class: 'muted' }, 'Fill in the missing terms. Blurred words repeat a term you already have to find.'),
+      h('p', { class: 'muted' }, 'Fill in the missing word in each sentence. A blurred word is a repeat of a word you already have to find.'),
       body,
       h('div', { class: 'row spread', style: 'margin-top:16px' }, status,
         h('div', { class: 'row' },
