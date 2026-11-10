@@ -22,7 +22,7 @@
     }
   };
 
-  nav.append(SH.h('button', { class: 'logo', title: 'StudyHelp', onClick: () => SH.go('study') }, 'S'));
+  nav.append(SH.h('button', { class: 'logo', title: 'StudyHelp', onClick: () => SH.go('study') }, SH.h('img', { src: 'img/logo.svg', alt: 'StudyHelp' })));
   NAV.forEach(([id, label]) =>
     nav.append(SH.h('button', { class: 'nav-btn', dataset: { view: id }, onClick: () => SH.go(id) }, label))
   );
