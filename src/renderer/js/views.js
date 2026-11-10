@@ -160,7 +160,7 @@
 
     const recent = items.slice(0, 4);
     const TAG = { lesson: 'Lesson', test: 'Test', revision: 'Revision' };
-    main.replaceChildren(h('div', { class: 'hero' },
+    main.replaceChildren(...[h('div', { class: 'hero' },
       h('h1', {}, 'What are you ', h('em', {}, 'studying'), ' today?'),
       h('p', { class: 'sub muted' }, 'Drop a lesson or a test and turn it into a summary, practice questions and flash cards.'),
       await setupBanner(), drop, goBtn),
@@ -172,7 +172,7 @@
             h('b', {}, it.title),
             h('small', {}, SH.relDate(it.createdAt) + (it.best ? ` · best ${it.best.score}/${it.best.total}` : '')),
             h('div', { class: 'pg' }, h('i', { style: `width:${pct}%` })));
-        }))) : null);
+        }))) : null].filter(Boolean));
   };
 
   // ---------- Revision ----------
