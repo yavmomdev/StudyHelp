@@ -1,0 +1,3 @@
+'use strict';
+// App logo; its gradient follows the active theme through CSS variables.
+window.SHLogo = `<svg class="logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--accent)"/><stop offset="1" style="stop-color:var(--accent2)"/></linearGradient></defs><rect width="256" height="256" rx="58" fill="url(#lg)"/><path d="M128 96c-18-14-44-18-68-12v104c24-6 50-2 68 12 18-14 44-18 68-12V84c-24-6-50-2-68 12z" style="fill:var(--logo-fg)"/><path d="M128 96v104" stroke="url(#lg)" stroke-width="6"/><path d="M178 38l6 16 16 6-16 6-6 16-6-16-16-6 16-6z" fill="#fde68a"/></svg>`;

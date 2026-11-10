@@ -1,7 +1,7 @@
 'use strict';
 const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = require('electron');
 const path = require('path');
-const { createStore } = require('./store');
+const { createStore, THEMES } = require('./store');
 const jobs = require('./jobs');
 const builtin = require('./builtin');
 const providers = require('./providers');
@@ -19,6 +19,15 @@ const secrets = {
   },
 };
 
+// The window/taskbar icon follows the colour theme (assets/icons/<theme>.png).
+function themeIcon(theme) {
+  const t = THEMES.includes(theme) ? theme : 'cloud';
+  return path.join(__dirname, '..', '..', 'assets', 'icons', t + '.png');
+}
+function applyIcon(theme) {
+  if (win && !win.isDestroyed()) { try { win.setIcon(themeIcon(theme)); } catch { /* icon is cosmetic */ } }
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1280,
@@ -27,7 +36,7 @@ function createWindow() {
     minHeight: 640,
     backgroundColor: '#0f1117',
     title: 'StudyHelp',
-    icon: path.join(__dirname, '..', '..', 'assets', 'icon.png'),
+    icon: themeIcon(store.publicSettings(false).theme),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -96,7 +105,9 @@ app.whenReady().then(() => {
   handle('settings:get', () => store.publicSettings(!!builtin.geminiKey));
   handle('settings:set', (patch) => {
     store.saveSettings(patch || {});
-    return store.publicSettings(!!builtin.geminiKey);
+    const pub = store.publicSettings(!!builtin.geminiKey);
+    if (patch && patch.theme) applyIcon(pub.theme);
+    return pub;
   });
   handle('settings:setActive', (id) => {
     store.setActive(String(id), !!builtin.geminiKey);
