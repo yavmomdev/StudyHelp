@@ -143,3 +143,16 @@ test('ollama: local call, no key needed, images become OCR text path (no vision 
   assert.strictEqual(seen[0].url, 'http://localhost:11434/api/chat');
   assert.strictEqual(seen[0].body.format, 'json');
 });
+
+test('extractFiles reads files in parallel but keeps their order and survives a bad file', async () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const { extractFiles } = require('../src/main/extract');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ex-'));
+  const a = path.join(dir, 'a.txt'); const b = path.join(dir, 'b.txt');
+  fs.writeFileSync(a, 'first'); fs.writeFileSync(b, 'second');
+  const r = await extractFiles([a, path.join(dir, 'missing.txt'), b, path.join(dir, 'x.xyz')]);
+  assert.deepStrictEqual(r.texts.map((t) => t.text), ['first', 'second']);
+  assert.strictEqual(r.warnings.length, 2);
+});

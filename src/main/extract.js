@@ -14,6 +14,7 @@ const IMAGE_MIME = {
 const SUPPORTED_EXTENSIONS = [...TEXT_EXT, '.pdf', '.docx', ...Object.keys(IMAGE_MIME)];
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // Anthropic per-image limit
+const MAX_TOTAL_IMAGE_B64 = 20 * 1024 * 1024; // base64 characters; providers reject requests much larger than this
 
 function htmlToText(html) {
   return html
@@ -65,14 +66,18 @@ async function extractOne(filePath) {
 // A file that fails to read becomes a warning, so one bad file doesn't lose the whole batch.
 async function extractFiles(paths = []) {
   const out = { texts: [], images: [], warnings: [] };
-  for (const p of paths) {
-    try {
-      const r = await extractOne(p);
-      if (r.warning) out.warnings.push(r.warning);
-      if (r.text) out.texts.push({ name: r.name, text: r.text });
-      if (r.image) out.images.push(r.image);
-    } catch (e) {
-      out.warnings.push(e.message);
+  // Files are read in parallel; results are added in the original order.
+  const results = await Promise.allSettled(paths.map(extractOne));
+  let imageBytes = 0;
+  for (const r of results) {
+    if (r.status === 'rejected') { out.warnings.push(r.reason?.message || String(r.reason)); continue; }
+    const v = r.value;
+    if (v.warning) out.warnings.push(v.warning);
+    if (v.text) out.texts.push({ name: v.name, text: v.text });
+    if (v.image) {
+      imageBytes += v.image.data.length;
+      if (imageBytes > MAX_TOTAL_IMAGE_B64) out.warnings.push(`${v.name}: skipped, too many images at once (keep them under about 15 MB in total).`);
+      else out.images.push(v.image);
     }
   }
   return out;

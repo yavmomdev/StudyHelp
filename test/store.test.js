@@ -103,3 +103,26 @@ test('theme: defaults to cloud, is remembered, and invalid values fall back', ()
   fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({ theme: '<script>' }));
   assert.strictEqual(createStore(dir, secrets).publicSettings(false).theme, 'cloud');
 });
+
+test('history summaries stay correct after attempts, edits and deletes (cache)', () => {
+  const s = createStore(tmp());
+  const a = s.saveItem({ type: 'test', title: 'A', data: {} });
+  assert.strictEqual(s.listItems()[0].best, null);
+  s.addAttempt(a.id, { mode: 'test', score: 2, total: 4 });
+  s.addAttempt(a.id, { mode: 'test', score: 3, total: 4 });
+  s.addAttempt(a.id, { mode: 'test', score: 1, total: 4 });
+  const row = s.listItems()[0];
+  assert.deepStrictEqual(row.best, { score: 3, total: 4 });
+  assert.strictEqual(row.attempts, 3);
+  s.deleteItems([a.id]);
+  assert.strictEqual(s.listItems().length, 0);
+});
+
+test('settings changes are visible immediately (cache is invalidated)', () => {
+  const s = createStore(tmp(), secrets);
+  assert.strictEqual(s.loadSettings().theme, 'cloud');
+  s.saveSettings({ theme: 'ocean' });
+  assert.strictEqual(s.loadSettings().theme, 'ocean');
+  s.saveSettings({ theme: 'nonsense' });
+  assert.strictEqual(s.loadSettings().theme, 'cloud');
+});

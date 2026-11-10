@@ -74,7 +74,9 @@ SH.toast = (msg, kind = '') => {
 
 SH.confirm = (title, body, okLabel = 'Delete') =>
   new Promise((resolve) => {
+    const onKey = (e) => { if (e.key === 'Escape') done(false); };
     const done = (v) => {
+      document.removeEventListener('keydown', onKey);
       layer.remove();
       resolve(v);
     };
@@ -87,6 +89,7 @@ SH.confirm = (title, body, okLabel = 'Delete') =>
           SH.h('button', { class: 'btn danger', onClick: () => done(true) }, okLabel)))
     );
     document.body.append(layer);
+    document.addEventListener('keydown', onKey);
   });
 
 // Runs a long job behind a spinner overlay; progress messages come from the main process.

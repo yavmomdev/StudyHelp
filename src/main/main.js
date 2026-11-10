@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell, session } = require('electron');
 const path = require('path');
 const { createStore, THEMES } = require('./store');
 const jobs = require('./jobs');
@@ -28,15 +28,20 @@ function applyIcon(theme) {
   if (win && !win.isDestroyed()) { try { win.setIcon(themeIcon(theme)); } catch { /* icon is cosmetic */ } }
 }
 
+// Window background while the page loads: matches the chosen theme so there is no flash of the wrong colour.
+const THEME_BG = { cloud: '#f4f6ff', aurora: '#0b0d17', ocean: '#06121f', emerald: '#07130f', sunset: '#140b0f', graphite: '#0e0f12' };
+
 function createWindow() {
+  const theme = store.publicSettings(false).theme;
   win = new BrowserWindow({
+    show: false, // shown once the first frame is ready
     width: 1280,
     height: 820,
     minWidth: 980,
     minHeight: 640,
-    backgroundColor: '#0f1117',
+    backgroundColor: THEME_BG[theme] || THEME_BG.cloud,
     title: 'StudyHelp',
-    icon: themeIcon(store.publicSettings(false).theme),
+    icon: themeIcon(theme),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -45,13 +50,17 @@ function createWindow() {
       sandbox: true,
     },
   });
+  win.once('ready-to-show', () => win.show());
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   // Links open in the system browser, the app never navigates away.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https:\/\//.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
-  win.webContents.on('will-navigate', (e) => e.preventDefault());
+  win.webContents.on('will-navigate', (e, url) => {
+    e.preventDefault();
+    if (/^https:\/\//.test(url)) shell.openExternal(url);
+  });
 }
 
 // Every handler returns {ok, data} or {ok:false, error} so the UI can show errors nicely.
@@ -66,7 +75,15 @@ function handle(channel, fn) {
   });
 }
 
+// Two copies running at once would overwrite each other's history files: focus the first one instead.
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) app.quit();
+else app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
+
 app.whenReady().then(() => {
+  if (!gotLock) return;
+  // The app never needs camera, microphone, location, etc.
+  session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
   store = createStore(path.join(app.getPath('userData'), 'studyhelp'), secrets);
   const ctx = () => {
     const provider = store.activeProvider(builtin.geminiKey);

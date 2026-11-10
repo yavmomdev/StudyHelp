@@ -51,15 +51,21 @@ async function gemini(p, req, onProgress) {
         return await geminiOnce(p, model, req);
       } catch (e) {
         lastErr = e;
-        if (![500, 502, 503, 504].includes(e.status)) throw e; // real errors (bad key, quota...) are not retried
+        // Free quotas are per model: when one is used up, a lighter model may still have room.
+        if (e.status === 429 && mi < models.length - 1) {
+          onProgress?.(`${model} hit its free limit, switching to ${models[mi + 1]}...`);
+          break;
+        }
+        if (![500, 502, 503, 504].includes(e.status)) throw e; // real errors (bad key...) are not retried
         if (attempt < delays.length) {
           onProgress?.(`${model} is busy, retrying (${attempt + 1}/${delays.length})...`);
           await sleep(delays[attempt]);
         }
       }
     }
-    if (mi < models.length - 1) onProgress?.(`${model} is overloaded, switching to ${models[mi + 1]}...`);
+    if (mi < models.length - 1 && lastErr.status !== 429) onProgress?.(`${model} is overloaded, switching to ${models[mi + 1]}...`);
   }
+  if (lastErr.status === 429) throw lastErr;
   throw new Error(`Gemini is overloaded right now (${lastErr.message}). Try again in a few minutes.`);
 }
 

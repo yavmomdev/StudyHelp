@@ -59,25 +59,43 @@ function createStore(baseDir, secrets = { encrypt: (s) => s, decrypt: (s) => s }
     }
   }
 
+  // Listing only needs a small summary of each item, but the files hold whole lessons. Summaries are cached
+  // and re-read only when a file's size or modification time changes, so opening History stays instant.
+  const summaries = new Map(); // file name -> { stamp, summary }
+
   function listItems() {
     const out = [];
+    const present = new Set();
     for (const f of fs.readdirSync(itemsDir)) {
       if (!f.endsWith('.json')) continue;
+      present.add(f);
       try {
-        const it = JSON.parse(fs.readFileSync(path.join(itemsDir, f), 'utf8'));
-        out.push({
-          id: it.id,
-          type: it.type,
-          title: it.title,
-          createdAt: it.createdAt,
-          meta: it.meta || {},
-          attempts: (it.attempts || []).length,
-          best: bestAttempt(it.attempts),
-        });
+        const file = path.join(itemsDir, f);
+        const st = fs.statSync(file);
+        const stamp = `${st.mtimeMs}:${st.size}`;
+        let hit = summaries.get(f);
+        if (!hit || hit.stamp !== stamp) {
+          const it = JSON.parse(fs.readFileSync(file, 'utf8'));
+          hit = {
+            stamp,
+            summary: {
+              id: it.id,
+              type: it.type,
+              title: it.title,
+              createdAt: it.createdAt,
+              meta: it.meta || {},
+              attempts: (it.attempts || []).length,
+              best: bestAttempt(it.attempts),
+            },
+          };
+          summaries.set(f, hit);
+        }
+        out.push(hit.summary);
       } catch {
         /* skip corrupt file */
       }
     }
+    for (const f of summaries.keys()) if (!present.has(f)) summaries.delete(f);
     return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
@@ -116,16 +134,31 @@ function createStore(baseDir, secrets = { encrypt: (s) => s, decrypt: (s) => s }
     return out;
   }
 
+  // Settings are read often (every job, every page), so the parsed file is cached until it changes on disk.
+  let settingsCache = null; // { stamp, value }
   function readSettings() {
-    let raw = {};
+    let stamp = 'none';
     try {
-      raw = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+      const st = fs.statSync(settingsFile);
+      stamp = `${st.mtimeMs}:${st.size}`;
     } catch {
       /* first run */
     }
-    return { ...DEFAULT_SETTINGS, ...migrate(raw) };
+    if (!settingsCache || settingsCache.stamp !== stamp) {
+      let raw = {};
+      try {
+        raw = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+      } catch {
+        /* first run or unreadable: start from defaults */
+      }
+      settingsCache = { stamp, value: { ...DEFAULT_SETTINGS, ...migrate(raw) } };
+    }
+    return structuredClone(settingsCache.value); // callers modify their copy before saving
   }
-  const writeSettings = (s) => writeAtomic(settingsFile, s);
+  const writeSettings = (s) => {
+    writeAtomic(settingsFile, s);
+    settingsCache = null;
+  };
 
   const effectiveActive = (s, builtinOk) => {
     if (s.activeId === 'ollama') return 'ollama';

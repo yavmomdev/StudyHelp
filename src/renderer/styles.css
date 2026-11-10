@@ -240,7 +240,6 @@ table.data td { padding: 10px 14px; border-top: 1px solid var(--line); vertical-
 .rcard small { color: var(--muted); }
 .rcard .pg { height: 5px; border-radius: 9px; background: var(--line); margin-top: 14px; overflow: hidden; }
 .rcard .pg i { display: block; height: 100%; border-radius: 9px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
-.chipcard { background: var(--panel2); }
 .tag { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
   color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .tag.test { color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); }

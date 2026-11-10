@@ -82,11 +82,13 @@
     let qs = prep(questions);
     let i = 0;
     let picks = [];
+    let reported = false; // one saved attempt per full run (retrying only the missed ones is not a full run)
 
     function start(list) {
       qs = prep(list);
       i = 0;
       picks = [];
+      reported = list !== questions;
       draw();
     }
 
@@ -140,7 +142,7 @@
     function result() {
       const wrong = qs.filter((q, k) => picks[k] !== q.answerIndex);
       const score = qs.length - wrong.length;
-      opts.onDone?.({ score, total: qs.length });
+      if (!reported) { reported = true; opts.onDone?.({ score, total: qs.length }); }
       box.replaceChildren(
         h('div', { class: 'row spread' },
           h('div', {}, h('div', { class: 'score' }, `${score} / ${qs.length}`),
@@ -171,6 +173,7 @@
     let known = 0;
     let total = deck.length;
     let missed = [];
+    let fullRun = true; // only a pass through the whole deck is saved as an attempt
 
     function draw() {
       if (!deck.length) return finish();
@@ -195,13 +198,13 @@
     }
 
     function finish() {
-      opts.onDone?.({ score: known, total });
+      if (fullRun) { fullRun = false; opts.onDone?.({ score: known, total }); }
       box.replaceChildren(h('div', { class: 'card' },
         h('div', { class: 'score' }, `${known} / ${total}`),
         h('div', { class: 'muted' }, 'cards you knew'),
         h('div', { class: 'row', style: 'margin-top:18px' },
           missed.length ? h('button', { class: 'btn', onClick: () => { deck = SH.shuffle(missed); total = deck.length; known = 0; missed = []; draw(); } }, `Review ${missed.length} missed`) : null,
-          h('button', { class: 'btn primary', onClick: () => { deck = SH.shuffle(cards); total = deck.length; known = 0; missed = []; draw(); } }, 'Restart'))));
+          h('button', { class: 'btn primary', onClick: () => { deck = SH.shuffle(cards); total = deck.length; known = 0; missed = []; fullRun = true; draw(); } }, 'Restart'))));
     }
 
     draw();
@@ -231,6 +234,7 @@
 
     const status = h('span', { class: 'muted' }, `${blanks.length} blanks`);
     let checked = false;
+    let reportedBest = -1; // a saved attempt only when the score improves, not on every click of Check
 
     function check() {
       let ok = 0;
@@ -247,7 +251,7 @@
       status.textContent = `${ok} / ${blanks.length} correct`;
       if (!checked && ok === blanks.length) SH.toast('All blanks correct! 🎉', 'ok');
       checked = true;
-      opts.onDone?.({ score: ok, total: blanks.length });
+      if (ok > reportedBest) { reportedBest = ok; opts.onDone?.({ score: ok, total: blanks.length }); }
     }
 
     function reveal() {
@@ -266,6 +270,7 @@
       echoes.forEach((e) => e.el.classList.remove('shown'));
       status.textContent = `${blanks.length} blanks`;
       checked = false;
+      reportedBest = -1;
     }
 
     return h('div', {},
