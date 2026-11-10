@@ -316,12 +316,27 @@
         h('option', { value: v, selected: s.language === v || null }, l)));
     lang.addEventListener('change', async () => { await SH.call(api().settings.set({ language: lang.value })); SH.toast('Saved', 'ok'); });
 
+    // Colour theme: applied instantly, saved so it is remembered next time.
+    const themeGrid = h('div', { class: 'themes' });
+    const drawThemes = (current) => themeGrid.replaceChildren(...SHTheme.THEMES.map((t) =>
+      h('button', { class: `theme-opt ${t.id === current ? 'active' : ''}`, onClick: async () => {
+        SHTheme.apply(t.id);
+        drawThemes(t.id);
+        await SH.call(api().settings.set({ theme: t.id }));
+      } },
+        h('div', { class: 'sw', style: `background:${t.bg}` },
+          h('u', { style: `background:${t.orb}` }), h('i', { style: `background:linear-gradient(90deg,${t.a1},${t.a2})` })),
+        h('b', {}, t.name), h('small', {}, t.desc))));
+    drawThemes(SHTheme.apply(s.theme));
+
     main.replaceChildren(h('div', { class: 'page' },
       ...header('Settings', 'Pick which AI StudyHelp uses. Your lessons and history are stored only on this computer.'),
       h('h3', {}, 'AI'),
       gemini, ollama, ...customs,
       h('button', { class: 'prov-card add', onClick: () => SH.go('provider', {}) }, '+  Create new option (use your own API key)'),
       h('p', { class: 'muted' }, 'With a cloud option your material is sent to that company to be processed. With Ollama nothing leaves your computer.'),
+      h('h3', { style: 'margin-top:28px' }, 'Colour theme'),
+      themeGrid,
       h('h3', { style: 'margin-top:28px' }, 'Output language'),
       h('div', { class: 'card' }, lang)));
   };

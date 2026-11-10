@@ -28,5 +28,7 @@
   );
 
   window.studyhelp.onProgress((m) => SH.setProgress?.(m));
+  // The saved setting is the source of truth for the theme (localStorage only avoids a flash on startup).
+  window.studyhelp.settings.get().then((r) => r.ok && SHTheme.apply(r.data.theme));
   SH.go('lesson');
 })(window.SH);

@@ -53,7 +53,7 @@
     }
 
     let svg = `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(d.title || 'Diagram')}">
-<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#7c8cff"/></marker></defs>`;
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--accent)"/></marker></defs>`;
 
     for (const e of d.edges) {
       const a = pos[e.from], b = pos[e.to];
@@ -67,17 +67,17 @@
         path = `M${x1} ${y1} C${x1} ${y1 + dy} ${x2} ${y2 + dy} ${x2} ${y2}`;
         lx = (x1 + x2) / 2; ly = Math.max(y1, y2) + dy * 0.75 + 4;
       }
-      svg += `<path d="${path}" fill="none" stroke="#7c8cff" stroke-width="1.8" marker-end="url(#arr)" opacity=".85"/>`;
-      if (e.label) svg += `<text x="${lx}" y="${ly}" text-anchor="middle" font-size="11" fill="#9aa1b8">${esc(e.label)}</text>`;
+      svg += `<path d="${path}" fill="none" style="stroke:var(--accent)" stroke-width="1.8" marker-end="url(#arr)" opacity=".85"/>`;
+      if (e.label) svg += `<text x="${lx}" y="${ly}" text-anchor="middle" font-size="11" style="fill:var(--muted)">${esc(e.label)}</text>`;
     }
 
     for (const n of d.nodes) {
       const { x, y } = pos[n.id];
       const lines = wrap(n.label);
-      svg += `<rect x="${x}" y="${y}" width="${W}" height="${H}" rx="12" fill="#1e2230" stroke="#7c8cff" stroke-opacity=".6"/>`;
+      svg += `<rect x="${x}" y="${y}" width="${W}" height="${H}" rx="12" style="fill:var(--panel2);stroke:var(--accent)" stroke-opacity=".7"/>`;
       lines.forEach((ln, i) => {
         const ty = y + H / 2 + (i - (lines.length - 1) / 2) * 15 + 4;
-        svg += `<text x="${x + W / 2}" y="${ty}" text-anchor="middle" font-size="13" fill="#e8eaf2">${esc(ln)}</text>`;
+        svg += `<text x="${x + W / 2}" y="${ty}" text-anchor="middle" font-size="13" style="fill:var(--text)">${esc(ln)}</text>`;
       });
     }
     return svg + '</svg>';

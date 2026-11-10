@@ -6,11 +6,13 @@ const path = require('path');
 const crypto = require('crypto');
 
 const KINDS = ['anthropic', 'gemini', 'openai'];
+const THEMES = ['cloud', 'aurora', 'ocean', 'emerald', 'sunset', 'graphite'];
 
 // General settings. AI options live next to them: 'builtin' (Gemini Free), 'ollama', or a custom option id.
 const DEFAULT_SETTINGS = {
   activeId: '',
   language: 'auto', // 'auto' = same language as the material
+  theme: 'cloud', // colour theme id
   geminiModel: 'gemini-3.5-flash', // model used by the built-in Gemini (Free)
   ollamaUrl: 'http://localhost:11434',
   ollamaModel: 'llama3.1',
@@ -126,12 +128,15 @@ function createStore(baseDir, secrets = { encrypt: (s) => s, decrypt: (s) => s }
   // General settings only (language, built-in model, Ollama address/model).
   function loadSettings() {
     const s = readSettings();
-    return Object.fromEntries(GENERAL_KEYS.map((k) => [k, s[k]]));
+    const out = Object.fromEntries(GENERAL_KEYS.map((k) => [k, s[k]]));
+    if (!THEMES.includes(out.theme)) out.theme = DEFAULT_SETTINGS.theme;
+    return out;
   }
 
   function saveSettings(patch) {
     const s = readSettings();
     for (const k of GENERAL_KEYS) if (patch[k] !== undefined) s[k] = String(patch[k]).trim();
+    if (!THEMES.includes(s.theme)) s.theme = DEFAULT_SETTINGS.theme;
     writeSettings(s);
     return loadSettings();
   }
@@ -217,4 +222,4 @@ function createStore(baseDir, secrets = { encrypt: (s) => s, decrypt: (s) => s }
   };
 }
 
-module.exports = { createStore, DEFAULT_SETTINGS };
+module.exports = { createStore, DEFAULT_SETTINGS, THEMES };

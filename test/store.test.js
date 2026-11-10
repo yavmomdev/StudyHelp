@@ -91,3 +91,15 @@ test('old settings (one Anthropic key, one Gemini key) are migrated to custom op
   const a = s.activeProvider(null);
   assert.deepStrictEqual([a.kind, a.key], ['gemini', 'AIza-old']);
 });
+
+test('theme: defaults to cloud, is remembered, and invalid values fall back', () => {
+  const dir = tmp();
+  const s = createStore(dir, secrets);
+  assert.strictEqual(s.publicSettings(false).theme, 'cloud');
+  s.saveSettings({ theme: 'ocean' });
+  assert.strictEqual(createStore(dir, secrets).publicSettings(false).theme, 'ocean'); // survives a restart
+  s.saveSettings({ theme: 'not-a-theme' });
+  assert.strictEqual(s.publicSettings(false).theme, 'cloud');
+  fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({ theme: '<script>' }));
+  assert.strictEqual(createStore(dir, secrets).publicSettings(false).theme, 'cloud');
+});
