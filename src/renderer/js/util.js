@@ -109,6 +109,9 @@ SH.call = async (promise) => {
   const r = await promise;
   if (!r.ok) {
     SH.toast(r.error, 'error');
+    // A key that stopped working sends the user straight to that option's edit page.
+    if (r.code === 'BAD_KEY' && r.providerId) SH.go('provider', { editId: r.providerId, badKey: true });
+    else if (r.code === 'NO_PROVIDER') SH.go('settings');
     return null;
   }
   return r.data;

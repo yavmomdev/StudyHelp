@@ -25,7 +25,7 @@ async function gatherSource({ files = [], text = '' }, ctx) {
   const texts = [...ex.texts];
   if (text.trim()) texts.push({ name: 'Pasted notes', text: text.trim() });
   let images = ex.images;
-  if (images.length && ctx.settings.provider === 'ollama') {
+  if (images.length && ctx.provider.kind === 'ollama') {
     texts.push(...(await ocrImages(images, ctx.onProgress)));
     images = [];
   }
@@ -46,7 +46,7 @@ function meta(data, extra = {}) {
 async function run(ctx, builder, source, extraOpts = {}) {
   ctx.onProgress?.('Thinking… this can take up to a minute.');
   const req = builder({ texts: source.texts, language: ctx.settings.language, hasImages: source.images.length > 0, ...extraOpts });
-  return completeJSON(ctx.settings, { ...req, images: source.images }, ctx.onProgress);
+  return completeJSON(ctx.provider, { ...req, images: source.images }, ctx.onProgress);
 }
 
 async function createLesson(payload, ctx) {

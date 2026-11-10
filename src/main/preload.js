@@ -18,6 +18,14 @@ contextBridge.exposeInMainWorld('studyhelp', {
   settings: {
     get: () => call('settings:get'),
     set: (patch) => call('settings:set', patch),
+    setActive: (id) => call('settings:setActive', id),
+  },
+  provider: {
+    known: () => call('provider:known'),
+    detect: (key) => call('provider:detect', key),
+    models: (p) => call('provider:models', p),
+    save: (p) => call('provider:save', p),
+    remove: (id) => call('provider:delete', id),
   },
   onProgress: (cb) => ipcRenderer.on('progress', (_e, msg) => cb(msg)),
 });

@@ -12,7 +12,7 @@
   const main = document.getElementById('main');
 
   SH.go = async (view, arg) => {
-    const active = view === 'open' ? 'history' : view;
+    const active = view === 'open' ? 'history' : view === 'provider' ? 'settings' : view;
     nav.querySelectorAll('.nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === active));
     main.scrollTop = 0;
     try {

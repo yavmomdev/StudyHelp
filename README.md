@@ -23,15 +23,20 @@ npm install
 npm start
 ```
 
-Then open **Settings** and pick a provider:
+Then open **Settings** and choose the AI:
 
-- **Google Gemini (free tier, easiest start):** get a free key at [aistudio.google.com](https://aistudio.google.com) (Get API key). Models: *Gemini 3.5 Flash* (balanced, thinking; default), *Gemini 2.5 Pro* (deepest thinking, slowest, tightest free limit), *Gemini 3.1 Flash-Lite* (fastest). Free-tier limits apply and Google may use free-tier prompts to improve its products.
-- **Anthropic API:** paste an API key (pay-as-you-go).
-- **Ollama:** local and private; select **Ollama** (install [Ollama](https://ollama.com), then e.g. `ollama pull llama3.1`).
+- **Gemini (Free):** works out of the box if this copy has a built-in key (see below). Modes: *Balanced, thinking* (Gemini 3.5 Flash, default), *Deepest thinking* (2.5 Pro, slowest, tightest free limit), *Fastest* (3.1 Flash-Lite). Free-tier prompts may be used by Google, so avoid private material.
+- **Ollama:** local and private. Install [Ollama](https://ollama.com), run `ollama pull llama3.1`, and pick it. Images are read with OCR.
+- **Create new option:** paste any API key. StudyHelp recognises the provider from the key (Google Gemini, Anthropic, OpenAI, Groq, OpenRouter, Mistral, Cerebras, xAI, ... or any OpenAI-compatible URL), checks the key and lists the models you can use, and saves it as a new option you can switch to, edit or delete. If a key stops working, the app jumps straight to that option's edit page.
+
+### Built-in key for "Gemini (Free)"
+
+The repo is public, so the key is **not** in git. Copy `src/main/builtin-key.example.json` to `src/main/builtin-key.json` (git-ignored) and put a free Gemini key from [aistudio.google.com](https://aistudio.google.com) in it, then start or build the app. Without that file the option shows "Not included in this copy" and people can use Ollama or their own key.
+A key shipped inside an app can be extracted by determined users, so use a throwaway key and move to a small proxy server before sharing widely.
 
 - API keys are stored encrypted with your OS keychain when available and never sent to the UI.
-- With Gemini or the Anthropic API your material is sent to that company for processing; with Ollama nothing leaves your computer.
-- Local models read images through OCR (language data downloads once). Scanned PDFs: export the pages as images.
+- With a cloud option your material is sent to that company for processing; with Ollama nothing leaves your computer.
+- Scanned PDFs: export the pages as images.
 
 Build an installer: `npm run dist`.  Run the tests: `npm test`.
 

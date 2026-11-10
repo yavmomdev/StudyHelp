@@ -46,13 +46,10 @@
 
   async function setupBanner() {
     const s = await SH.call(api().settings.get());
-    if (!s) return null;
-    const missing = (s.provider === 'anthropic' && !s.hasApiKey) || (s.provider === 'gemini' && !s.hasGeminiKey);
-    return missing
-      ? h('div', { class: 'callout' }, 'To generate content, add your API key in ',
-          h('a', { href: '#', style: 'color:var(--accent)', onClick: (e) => { e.preventDefault(); SH.go('settings'); } }, 'Settings'),
-          ' — Google Gemini has a free tier, or use a local Ollama model.')
-      : null;
+    if (!s || s.activeId) return null;
+    return h('div', { class: 'callout' }, 'No AI is selected yet. Open ',
+      h('a', { href: '#', style: 'color:var(--accent)', onClick: (e) => { e.preventDefault(); SH.go('settings'); } }, 'Settings'),
+      ' and pick Gemini (Free), Ollama, or create your own option.');
   }
 
   async function generate(label, job, then) {
@@ -255,60 +252,179 @@
     main.replaceChildren(page);
   };
 
-  // ---------- Settings ----------
+  // ---------- Settings: choose the AI ----------
+  const GEMINI_MODELS = [
+    ['gemini-3.5-flash', 'Balanced, thinking (recommended)'],
+    ['gemini-2.5-pro', 'Deepest thinking: slowest, tightest free limit'],
+    ['gemini-3.1-flash-lite', 'Fastest and lightest'],
+  ];
+  const KIND_LABEL = { anthropic: 'Anthropic', gemini: 'Google Gemini', openai: 'OpenAI-compatible' };
+
   SH.views.settings = async (main) => {
     const s = await SH.call(api().settings.get());
     if (!s) return;
-    const f = (name, label, type = 'text', placeholder = '') =>
-      h('label', { class: 'field' }, h('span', {}, label), h('input', { type, name, value: s[name] ?? '', placeholder }));
-    const provider = h('select', { name: 'provider' },
-      h('option', { value: 'gemini', selected: s.provider === 'gemini' || null }, 'Google Gemini (cloud, free tier)'),
-      h('option', { value: 'anthropic', selected: s.provider === 'anthropic' || null }, 'Anthropic API (cloud, paid)'),
-      h('option', { value: 'ollama', selected: s.provider === 'ollama' || null }, 'Ollama (local, private, free)'));
-    const key = h('input', { type: 'password', name: 'apiKey', placeholder: s.hasApiKey ? '•••••••• saved — type to replace' : 'sk-ant-…' });
-    const model = f('anthropicModel', 'Anthropic model');
-    const ollamaUrl = f('ollamaUrl', 'Ollama address');
-    const ollamaModel = f('ollamaModel', 'Ollama model (e.g. llama3.1, qwen2.5)');
-    const lang = h('select', { name: 'language' },
+    const refresh = () => SH.go('settings');
+    const pick = async (id) => { if (s.activeId !== id && (await SH.call(api().settings.setActive(id)))) refresh(); };
+
+    // A selectable card. `body` is extra content shown inside it.
+    const card = ({ id, title, badge, sub, body, actions, disabled }) =>
+      h('div', { class: `prov-card ${s.activeId === id ? 'active' : ''} ${disabled ? 'disabled' : ''}` },
+        h('div', { class: 'row', style: 'align-items:flex-start;gap:14px' },
+          h('div', { class: 'radio', title: 'Use this one', onClick: () => !disabled && pick(id) }),
+          h('div', { class: 'grow' },
+            h('div', { class: 'row spread' },
+              h('div', {}, h('b', {}, title), ' ', badge ? h('span', { class: 'pill' }, badge) : null),
+              actions ? h('div', { class: 'row' }, actions) : null),
+            sub ? h('div', { class: 'muted', style: 'margin-top:2px' }, sub) : null,
+            body ? h('div', { style: 'margin-top:12px' }, body) : null)));
+
+    // 1) Gemini (Free)
+    const gSel = h('select', {}, ...GEMINI_MODELS.map(([v, l]) => h('option', { value: v, selected: s.geminiModel === v || null }, `${l}`)));
+    if (!GEMINI_MODELS.some(([v]) => v === s.geminiModel)) gSel.append(h('option', { value: s.geminiModel, selected: true }, s.geminiModel));
+    gSel.addEventListener('change', async () => { await SH.call(api().settings.set({ geminiModel: gSel.value })); SH.toast('Saved', 'ok'); });
+    const gemini = card({
+      id: 'builtin', title: 'Gemini (Free)', badge: s.builtinAvailable ? 'Ready to use' : 'Not included in this copy', disabled: !s.builtinAvailable,
+      sub: 'No setup. Fast and free, with usage limits shared by everyone using the app.',
+      body: s.builtinAvailable
+        ? h('div', {}, h('label', { class: 'field' }, h('span', {}, 'Mode'), gSel),
+            h('p', { class: 'muted', style: 'margin:0' }, 'Free-tier prompts may be used by Google to improve its products, so avoid private material.'))
+        : h('p', { class: 'muted', style: 'margin:0' }, 'This copy of StudyHelp has no built-in key. Create your own option below (a free Gemini key works).'),
+    });
+
+    // 2) Ollama
+    const oUrl = h('input', { type: 'text', value: s.ollamaUrl });
+    const oModel = h('input', { type: 'text', value: s.ollamaModel });
+    const ollama = card({
+      id: 'ollama', title: 'Ollama', badge: 'Local', sub: 'Runs on your own computer: private, free, works offline. Needs Ollama installed.',
+      body: h('div', {},
+        h('label', { class: 'field' }, h('span', {}, 'Ollama address'), oUrl),
+        h('label', { class: 'field' }, h('span', {}, 'Model (for example llama3.1 or qwen2.5)'), oModel),
+        h('p', { class: 'muted' }, 'Install from ollama.com, then run  ollama pull llama3.1  in a terminal. Images are read with OCR.'),
+        h('button', { class: 'btn small', onClick: async () => {
+          if (await SH.call(api().settings.set({ ollamaUrl: oUrl.value, ollamaModel: oModel.value }))) SH.toast('Ollama settings saved', 'ok');
+        } }, 'Save Ollama settings')),
+    });
+
+    // 3) custom options
+    const customs = s.providers.map((p) => card({
+      id: p.id, title: p.name, badge: KIND_LABEL[p.kind], sub: `Model: ${p.model}`,
+      actions: [h('button', { class: 'btn small', onClick: () => SH.go('provider', { editId: p.id }) }, 'Edit')],
+    }));
+
+    const lang = h('select', {},
       ...[['auto', 'Same as the material'], ['English', 'English'], ['Bulgarian', 'Bulgarian']].map(([v, l]) =>
         h('option', { value: v, selected: s.language === v || null }, l)));
+    lang.addEventListener('change', async () => { await SH.call(api().settings.set({ language: lang.value })); SH.toast('Saved', 'ok'); });
 
-    const GEMINI_MODELS = [
-      ['gemini-3.5-flash', 'Gemini 3.5 Flash: balanced, thinking (recommended)'],
-      ['gemini-2.5-pro', 'Gemini 2.5 Pro: deepest thinking, slowest, tightest free limit'],
-      ['gemini-3.1-flash-lite', 'Gemini 3.1 Flash-Lite: fastest, lightest'],
-      ['gemini-2.5-flash', 'Gemini 2.5 Flash: fast thinking'],
-    ];
-    if (!GEMINI_MODELS.some(([v]) => v === s.geminiModel)) GEMINI_MODELS.push([s.geminiModel, s.geminiModel]);
-    const gKey = h('input', { type: 'password', name: 'geminiApiKey', placeholder: s.hasGeminiKey ? '•••••••• saved — type to replace' : 'AIza…' });
-    const gModel = h('select', { name: 'geminiModel' }, ...GEMINI_MODELS.map(([v, l]) => h('option', { value: v, selected: s.geminiModel === v || null }, l)));
-    const gemini = h('div', {},
-      h('label', { class: 'field' }, h('span', {}, 'Gemini API key'), gKey),
-      h('label', { class: 'field' }, h('span', {}, 'Gemini model'), gModel),
-      h('p', { class: 'muted' }, 'Free key: aistudio.google.com → Get API key. Free-tier limits apply and Google may use free-tier prompts to improve its products, so avoid private material.'),
-      s.hasGeminiKey ? h('button', { class: 'btn small danger', style: 'margin-bottom:14px', onClick: async () => {
-        await SH.call(api().settings.set({ clear_geminiApiKey: true })); SH.toast('Gemini key removed', 'ok'); SH.go('settings'); } }, 'Remove saved Gemini key') : null);
-    const cloud = h('div', {}, h('label', { class: 'field' }, h('span', {}, 'Anthropic API key'), key), model,
-      s.hasApiKey ? h('button', { class: 'btn small danger', style: 'margin-bottom:14px', onClick: async () => {
-        await SH.call(api().settings.set({ clear_apiKey: true })); SH.toast('API key removed', 'ok'); SH.go('settings'); } }, 'Remove saved key') : null);
-    const local = h('div', {}, ollamaUrl, ollamaModel,
-      h('p', { class: 'muted' }, 'Local models read pasted text, PDFs and Word files. Images are read with OCR (the language data downloads once).'));
-    const sync = () => { cloud.classList.toggle('hidden', provider.value !== 'anthropic'); gemini.classList.toggle('hidden', provider.value !== 'gemini'); local.classList.toggle('hidden', provider.value !== 'ollama'); };
-    provider.addEventListener('change', sync);
-    sync();
-
-    const val = (el) => el.querySelector('input').value.trim();
     main.replaceChildren(h('div', { class: 'page' },
-      ...header('Settings', 'Your lessons and history are stored only on this computer.'),
+      ...header('Settings', 'Pick which AI StudyHelp uses. Your lessons and history are stored only on this computer.'),
+      h('h3', {}, 'AI'),
+      gemini, ollama, ...customs,
+      h('button', { class: 'prov-card add', onClick: () => SH.go('provider', {}) }, '+  Create new option (use your own API key)'),
+      h('p', { class: 'muted' }, 'With a cloud option your material is sent to that company to be processed. With Ollama nothing leaves your computer.'),
+      h('h3', { style: 'margin-top:28px' }, 'Output language'),
+      h('div', { class: 'card' }, lang)));
+  };
+
+  // ---------- Create / edit a custom AI option ----------
+  SH.views.provider = async (main, arg = {}) => {
+    const settings = await SH.call(api().settings.get());
+    const known = (await SH.call(api().provider.known())) || [];
+    if (!settings) return;
+    const existing = arg.editId ? settings.providers.find((p) => p.id === arg.editId) : null;
+    if (arg.editId && !existing) {
+      // The built-in key failed (or the option vanished): explain and open a blank form.
+      if (arg.badKey) SH.toast('The free Gemini key is not working right now. You can create your own option here.', 'error');
+      arg = {};
+    }
+
+    let kind = existing?.kind || 'gemini';
+    const key = h('input', { type: 'password', autocomplete: 'off', placeholder: existing ? 'saved. Paste a new key to replace it' : 'Paste your API key here' });
+    const provSel = h('select', {}, ...known.map((k) => h('option', { value: k.id }, k.name)));
+    const baseUrl = h('input', { type: 'text', placeholder: 'https://api.example.com/v1' });
+    const baseField = h('label', { class: 'field' }, h('span', {}, 'Provider address (API URL)'), baseUrl);
+    const model = h('input', { type: 'text', placeholder: 'Model name (or check the key to pick from a list)' });
+    const modelPick = h('select', { class: 'hidden', style: 'margin-top:8px', 'aria-label': 'Available models' });
+    modelPick.addEventListener('change', () => { model.value = modelPick.value; });
+    const name = h('input', { type: 'text', maxlength: '40', value: existing?.name || '' });
+    const detected = h('div', { class: 'muted', style: 'margin-top:6px;min-height:20px' });
+    const getKey = h('a', { href: '#', target: '_blank', style: 'color:var(--accent)' });
+    const status = h('div', { style: 'margin-top:8px;min-height:20px' });
+
+    const applyKnown = (k) => {
+      kind = k.kind;
+      provSel.value = k.id;
+      if (!existing || baseUrl.value === '' || known.some((x) => x.baseUrl === baseUrl.value)) baseUrl.value = k.baseUrl;
+      baseField.classList.toggle('hidden', kind !== 'openai');
+      if (!name.dataset.touched && !existing) name.value = k.id === 'other' ? '' : k.name;
+      getKey.textContent = k.keyUrl ? `Where do I get a ${k.name} key?` : '';
+      getKey.setAttribute('href', k.keyUrl || '#');
+    };
+
+    if (existing) {
+      const k = known.find((x) => x.kind === existing.kind && (existing.kind !== 'openai' || x.baseUrl === existing.baseUrl))
+        || known.find((x) => x.id === 'other');
+      applyKnown(k);
+      baseUrl.value = existing.baseUrl;
+      model.value = existing.model;
+    } else {
+      applyKnown(known.find((k) => k.id === 'gemini') || known[0]);
+    }
+    name.addEventListener('input', () => (name.dataset.touched = '1'));
+    provSel.addEventListener('change', () => { applyKnown(known.find((k) => k.id === provSel.value)); modelPick.classList.add('hidden'); });
+
+    // Work out the provider from the key as soon as it is pasted.
+    let detectTimer;
+    key.addEventListener('input', () => {
+      clearTimeout(detectTimer);
+      detectTimer = setTimeout(async () => {
+        const d = key.value.trim() ? await SH.call(api().provider.detect(key.value)) : null;
+        if (!d) { detected.textContent = key.value.trim() ? 'Could not recognise this key. Choose the provider below.' : ''; return; }
+        applyKnown(d);
+        detected.textContent = d.guess ? `Looks like ${d.name}. Not right? Change the provider below.` : `Detected: ${d.name}`;
+      }, 250);
+    });
+
+    const check = async () => {
+      status.className = 'muted';
+      status.textContent = 'Checking the key…';
+      const r = await api().provider.models({ id: existing?.id, kind, baseUrl: baseUrl.value, key: key.value });
+      if (!r.ok) { status.style.color = 'var(--bad)'; status.textContent = r.error; return; }
+      if (!r.data.includes(model.value)) model.value = r.data.find((m) => /flash|sonnet|haiku|small|instant|versatile|4o-mini|llama/i.test(m)) || r.data[0];
+      modelPick.replaceChildren(...r.data.map((m) => h('option', { value: m, selected: m === model.value || null }, m)));
+      modelPick.classList.remove('hidden');
+      status.style.color = 'var(--ok)';
+      status.textContent = `Key works. ${r.data.length} models found: pick one from the list or type a name.`;
+    };
+
+    const save = async () => {
+      const saved = await SH.call(api().provider.save({
+        id: existing?.id, name: name.value, kind, baseUrl: baseUrl.value, model: model.value, apiKey: key.value,
+      }));
+      if (saved) { SH.toast(existing ? 'Saved' : `"${saved.name}" created and selected`, 'ok'); SH.go('settings'); }
+    };
+
+    const remove = async () => {
+      if (!(await SH.confirm(`Delete "${existing.name}"?`, 'This removes the option and its saved API key from this computer.'))) return;
+      if ((await SH.call(api().provider.remove(existing.id))) != null) { SH.toast('Option deleted', 'ok'); SH.go('settings'); }
+    };
+
+    main.replaceChildren(h('div', { class: 'page' },
+      h('button', { class: 'btn small ghost', style: 'margin-bottom:10px', onClick: () => SH.go('settings') }, '← Settings'),
+      h('h1', {}, existing ? `Edit "${existing.name}"` : 'Create a new AI option'),
+      h('p', { class: 'sub' }, existing ? 'Change the key, model or name.' : 'Paste an API key and StudyHelp works out the rest.'),
+      arg.badKey && existing ? h('div', { class: 'callout' }, `The key for "${existing.name}" stopped working (wrong, expired or revoked). Paste a new key below and save.`) : null,
       h('div', { class: 'card' },
-        h('label', { class: 'field' }, h('span', {}, 'AI provider'), provider), gemini, cloud, local,
-        h('label', { class: 'field' }, h('span', {}, 'Output language'), lang),
-        h('p', { class: 'muted' }, 'With Gemini or the Anthropic API, your material is sent to that company to be processed. With Ollama nothing leaves your computer.'),
-        h('button', { class: 'btn primary', onClick: async () => {
-          const patch = { provider: provider.value, language: lang.value, anthropicModel: val(model), geminiModel: gModel.value, ollamaUrl: val(ollamaUrl), ollamaModel: val(ollamaModel) };
-          if (key.value.trim()) patch.apiKey = key.value.trim();
-          if (gKey.value.trim()) patch.geminiApiKey = gKey.value.trim();
-          if (await SH.call(api().settings.set(patch))) { SH.toast('Settings saved', 'ok'); SH.go('settings'); }
-        } }, 'Save'))));
+        h('label', { class: 'field' }, h('span', {}, '1. API key'), key, detected, h('div', { style: 'margin-top:6px' }, getKey)),
+        h('label', { class: 'field' }, h('span', {}, '2. Provider'), provSel),
+        baseField,
+        h('div', { class: 'field' }, h('span', { class: 'muted', style: 'display:block;font-size:13px;margin-bottom:6px' }, '3. Model'),
+          h('div', { class: 'row', style: 'align-items:flex-start' }, h('div', { class: 'grow' }, model, modelPick), h('button', { class: 'btn', onClick: check }, 'Check key & load models')), status),
+        h('label', { class: 'field' }, h('span', {}, '4. Name for this option'), name),
+        h('div', { class: 'row spread', style: 'margin-top:20px' },
+          existing ? h('button', { class: 'btn danger', onClick: remove }, 'Delete this option') : h('span'),
+          h('div', { class: 'row' },
+            h('button', { class: 'btn', onClick: () => SH.go('settings') }, 'Cancel'),
+            h('button', { class: 'btn primary', onClick: save }, existing ? 'Save changes' : 'Create option'))))));
   };
 })(window.SH);

@@ -3,6 +3,8 @@ const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = require('ele
 const path = require('path');
 const { createStore } = require('./store');
 const jobs = require('./jobs');
+const builtin = require('./builtin');
+const providers = require('./providers');
 const { SUPPORTED_EXTENSIONS } = require('./extract');
 
 let win;
@@ -49,18 +51,25 @@ function handle(channel, fn) {
       return { ok: true, data: await fn(payload) };
     } catch (err) {
       console.error(`[${channel}]`, err);
-      return { ok: false, error: err.message || String(err) };
+      return { ok: false, error: err.message || String(err), code: err.code, providerId: err.providerId };
     }
   });
 }
 
 app.whenReady().then(() => {
   store = createStore(path.join(app.getPath('userData'), 'studyhelp'), secrets);
-  const ctx = () => ({
-    store,
-    settings: store.loadSettings(),
-    onProgress: (msg) => win && !win.isDestroyed() && win.webContents.send('progress', msg),
-  });
+  const ctx = () => {
+    const provider = store.activeProvider(builtin.geminiKey);
+    if (!provider) {
+      throw Object.assign(new Error('Choose an AI first: open Settings and pick Gemini (Free), Ollama or create your own option.'), { code: 'NO_PROVIDER' });
+    }
+    return {
+      store,
+      settings: store.loadSettings(),
+      provider,
+      onProgress: (msg) => win && !win.isDestroyed() && win.webContents.send('progress', msg),
+    };
+  };
 
   handle('files:pick', async () => {
     const r = await dialog.showOpenDialog(win, {
@@ -83,11 +92,23 @@ app.whenReady().then(() => {
   handle('history:remove', (ids) => store.deleteItems(Array.isArray(ids) ? ids : []));
   handle('history:attempt', ({ id, attempt }) => store.addAttempt(id, attempt));
 
-  handle('settings:get', () => store.publicSettings());
+  handle('settings:get', () => store.publicSettings(!!builtin.geminiKey));
   handle('settings:set', (patch) => {
     store.saveSettings(patch || {});
-    return store.publicSettings();
+    return store.publicSettings(!!builtin.geminiKey);
   });
+  handle('settings:setActive', (id) => {
+    store.setActive(String(id), !!builtin.geminiKey);
+    return store.publicSettings(!!builtin.geminiKey);
+  });
+
+  // Custom AI options
+  handle('provider:known', () => providers.KNOWN);
+  handle('provider:detect', (key) => providers.detectFromKey(key));
+  handle('provider:models', ({ id, kind, baseUrl, key }) =>
+    providers.listModels({ kind, baseUrl, key: (key || '').trim() || (id ? store.getProviderKey(id) : '') }));
+  handle('provider:save', (p) => store.saveProvider(p || {}));
+  handle('provider:delete', (id) => store.deleteProvider(String(id)));
 
   createWindow();
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow());
