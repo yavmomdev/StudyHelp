@@ -85,57 +85,94 @@
     return { el: h('div', {}, h('div', { class: 'row spread', style: 'margin-bottom:8px' }, info, all), list), ids: () => [...sel] };
   }
 
-  // ---------- Lesson ----------
+  // ---------- Study home (lesson / test in one place) ----------
   SH.views = {};
 
-  SH.views.lesson = async (main) => {
-    const dz = dropzone({ hint: 'Send the whole lesson: PDF, Word, photos of notes, text…' });
-    const title = titleField();
-    const btn = h('button', { class: 'btn primary', onClick: () => {
-      if (dz.isEmpty()) return SH.toast('Add a file or paste some text first.', 'error');
-      generate('Reading your lesson and building the summary…',
-        () => api().createLesson({ ...dz.payload(), title: title.value() }),
-        (item) => SH.go('open', item.id));
-    } }, 'Create lesson');
-    main.replaceChildren(h('div', { class: 'page' },
-      ...header('New lesson', 'Upload a lesson and get a summary of the most important things, tables and diagrams where they help, a glossary and a quick check quiz.'),
-      await setupBanner(), h('div', { class: 'card' }, dz.el), title.el, btn));
+  const MODES = {
+    lesson: { label: 'Lesson', go: 'Create lesson', hint: 'Get a summary, tables and diagrams, a glossary and a quick check quiz.', busy: 'Reading your lesson and building the summary…' },
+    test: { label: 'Test', go: 'Create test', hint: 'Get a normal test, flash cards and blurry notes from this material.', busy: 'Writing your test…' },
+    fromlesson: { label: 'From a past lesson', go: 'Create test', hint: 'Pick one of your saved lessons to be tested on.', busy: 'Writing your test…' },
+    graded: { label: 'Analyze my mistakes', go: 'Analyze my test', hint: 'Upload a test you already took, with your answers and the marks. You get the rules you broke and similar questions.', busy: 'Finding your mistakes and writing practice questions…' },
   };
 
-  // ---------- Test ----------
-  SH.views.test = async (main, arg) => {
-    const lessons = ((await SH.call(api().history.list())) || []).filter((l) => l.type === 'lesson');
-    let mode = arg?.lessonId ? 'lesson' : 'material';
-    const dzMaterial = dropzone({ hint: 'Material to be tested on' });
-    const dzGraded = dropzone({ hint: 'Photos / PDF of the test you took, with your answers and the teacher’s marks' });
+  SH.views.study = async (main, arg) => {
+    const items = (await SH.call(api().history.list())) || [];
+    const lessons = items.filter((l) => l.type === 'lesson');
+    let mode = arg?.lessonId ? 'fromlesson' : (MODES[arg?.mode] ? arg.mode : 'lesson');
     const picker = lessonPicker(lessons, { multi: false, initial: arg?.lessonId });
-    const title = titleField();
+
+    const files = [];
+    const chips = h('div', { class: 'chips', style: 'margin-top:14px' });
+    const text = h('textarea', { placeholder: 'Paste notes or text here…', rows: '5' });
+    const title = h('input', { type: 'text', placeholder: 'Title (optional) — leave empty to let the AI name it' });
+    const drawChips = () => chips.replaceChildren(...files.map((f, i) =>
+      h('span', { class: 'chip' }, f.name, h('button', { title: 'Remove', onClick: (e) => { e.stopPropagation(); files.splice(i, 1); drawChips(); } }, '×'))));
+    const add = (list) => { for (const f of list) if (f.path && !files.some((x) => x.path === f.path)) files.push(f); drawChips(); };
+    const browse = async () => add((await SH.call(api().pickFiles())) || []);
+
+    const material = h('div', {},
+      h('div', { class: 'big' }, 'Drag & drop files here'),
+      h('div', { class: 'hint' }, 'PDF · Word · photos · text'),
+      h('div', { style: 'margin-top:14px' }, h('button', { class: 'btn', onClick: browse }, 'Browse files…')),
+      chips,
+      h('details', {}, h('summary', {}, 'or paste text'), text));
     const body = h('div');
-    const seg = h('div', { class: 'seg' });
-    const modes = {
-      material: ['From files', 'Upload notes or a lesson and get a test, flash cards and blurry notes.', () => dzMaterial.el],
-      lesson: ['From a previous lesson', 'Pick one of your saved lessons.', () => (lessons.length ? picker.el : h('div', { class: 'empty' }, 'No lessons yet. Create one first.'))],
-      graded: ['Analyze my test', 'Upload a test you already took. You’ll get the rules you broke and similar practice questions.', () => dzGraded.el],
-    };
+    const drop = h('div', { class: 'drop' }, body);
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop.addEventListener('drop', (e) => {
+      e.preventDefault();
+      drop.classList.remove('over');
+      if (mode === 'fromlesson') mode = 'test';
+      add([...e.dataTransfer.files].map((f) => ({ path: api().pathForFile(f), name: f.name })));
+      draw();
+    });
+
+    const modes = h('div', { class: 'modes' });
+    const modeHint = h('div', { class: 'modehint' });
+    const goBtn = h('button', { class: 'go', onClick: () => run() });
     const draw = () => {
-      seg.replaceChildren(...Object.entries(modes).map(([k, [label]]) =>
-        h('button', { class: k === mode ? 'active' : '', onClick: () => { mode = k; draw(); } }, label)));
-      body.replaceChildren(h('p', { class: 'muted' }, modes[mode][1]), h('div', { class: 'card' }, modes[mode][2]()));
+      modes.replaceChildren(...Object.entries(MODES).map(([k, m]) =>
+        h('button', { class: `mode ${k === mode ? 'on' : ''}`, onClick: () => { mode = k; draw(); } }, m.label)));
+      modeHint.textContent = MODES[mode].hint;
+      goBtn.textContent = `${MODES[mode].go} →`;
+      body.replaceChildren(
+        mode === 'fromlesson'
+          ? (lessons.length ? h('div', { style: 'text-align:left' }, picker.el) : h('div', { class: 'empty' }, 'No lessons yet. Create one first.'))
+          : material,
+        h('div', { class: 'drop-sep' }), modes, modeHint, title);
+    };
+
+    const run = () => {
+      const m = MODES[mode];
+      const base = { title: title.value };
+      if (mode === 'fromlesson') {
+        const [id] = picker.ids();
+        if (!id) return SH.toast('Pick a lesson.', 'error');
+        return generate(m.busy, () => api().createTest({ ...base, mode: 'lesson', lessonId: id }), (it) => SH.go('open', it.id));
+      }
+      if (!files.length && !text.value.trim()) return SH.toast('Add a file or paste some text first.', 'error');
+      const mat = { files: [...files], text: text.value };
+      if (mode === 'lesson') return generate(m.busy, () => api().createLesson({ ...mat, ...base }), (it) => SH.go('open', it.id));
+      generate(m.busy, () => api().createTest({ ...mat, ...base, mode: mode === 'graded' ? 'graded' : 'material' }), (it) => SH.go('open', it.id));
     };
     draw();
 
-    const go = h('button', { class: 'btn primary', onClick: () => {
-      let payload = { mode, title: title.value() };
-      if (mode === 'material') { if (dzMaterial.isEmpty()) return SH.toast('Add a file or paste some text first.', 'error'); payload = { ...payload, ...dzMaterial.payload() }; }
-      if (mode === 'graded') { if (dzGraded.isEmpty()) return SH.toast('Add your test first.', 'error'); payload = { ...payload, ...dzGraded.payload() }; }
-      if (mode === 'lesson') { const [id] = picker.ids(); if (!id) return SH.toast('Pick a lesson.', 'error'); payload.lessonId = id; }
-      generate(mode === 'graded' ? 'Finding your mistakes and writing practice questions…' : 'Writing your test…',
-        () => api().createTest(payload), (item) => SH.go('open', item.id));
-    } }, 'Create test');
-
-    main.replaceChildren(h('div', { class: 'page' },
-      ...header('New test', 'Every test comes in three variants: a normal test, flash cards and blurry notes.'),
-      await setupBanner(), seg, body, title.el, go));
+    const recent = items.slice(0, 4);
+    const TAG = { lesson: 'Lesson', test: 'Test', revision: 'Revision' };
+    main.replaceChildren(h('div', { class: 'hero' },
+      h('h1', {}, 'What are you ', h('em', {}, 'studying'), ' today?'),
+      h('p', { class: 'sub muted' }, 'Drop a lesson or a test and turn it into a summary, practice questions and flash cards.'),
+      await setupBanner(), drop, goBtn),
+      recent.length ? h('div', { class: 'recent' }, h('h2', {}, 'Continue where you left off'),
+        h('div', { class: 'recent-row' }, ...recent.map((it) => {
+          const pct = it.best ? Math.round((it.best.score / it.best.total) * 100) : 0;
+          return h('button', { class: 'rcard', onClick: () => SH.go('open', it.id) },
+            h('span', { class: `tag ${it.type}` }, TAG[it.type] || it.type),
+            h('b', {}, it.title),
+            h('small', {}, SH.relDate(it.createdAt) + (it.best ? ` · best ${it.best.score}/${it.best.total}` : '')),
+            h('div', { class: 'pg' }, h('i', { style: `width:${pct}%` })));
+        }))) : null);
   };
 
   // ---------- Revision ----------
@@ -172,7 +209,9 @@
     const visible = () => items.filter((i) => (filter === 'all' || i.type === filter) && i.title.toLowerCase().includes(query.toLowerCase()));
 
     function bestScore(it) {
-      return it.attempts ? `${it.attempts} attempt${it.attempts > 1 ? 's' : ''}` : 'not tried yet';
+      if (!it.attempts) return 'not tried yet';
+      const n = `${it.attempts} attempt${it.attempts > 1 ? 's' : ''}`;
+      return it.best ? `${n} · best ${it.best.score}/${it.best.total}` : n;
     }
     function metaLine(it) {
       const m = it.meta || {};
@@ -243,7 +282,7 @@
       page.append(SH.studyBody(d));
       if (d.questions?.length) page.append(h('h2', {}, 'Check what you learned'), SH.quiz(d.questions, { instant: true, onDone: (r) => api().saveAttempt(item.id, { mode: 'check', ...r }) }));
       page.append(h('div', { class: 'row', style: 'margin-top:26px' },
-        h('button', { class: 'btn primary', onClick: () => SH.go('test', { lessonId: item.id }) }, 'Make a full test from this lesson')));
+        h('button', { class: 'btn primary', onClick: () => SH.go('study', { lessonId: item.id }) }, 'Make a full test from this lesson')));
     } else if (item.type === 'revision') {
       page.append(SH.studyBody(d), h('h2', {}, 'Revision test'), SH.testTabs(item));
     } else {

@@ -2,8 +2,7 @@
 // Navigation shell.
 (function (SH) {
   const NAV = [
-    ['lesson', 'Lesson'],
-    ['test', 'Test'],
+    ['study', 'Study'],
     ['revision', 'Revision'],
     ['history', 'History'],
     ['settings', 'Settings'],
@@ -23,12 +22,13 @@
     }
   };
 
+  nav.append(SH.h('button', { class: 'logo', title: 'StudyHelp', onClick: () => SH.go('study') }, 'S'));
   NAV.forEach(([id, label]) =>
-    nav.append(SH.h('button', { class: 'nav-btn', dataset: { view: id }, onClick: () => SH.go(id), html: `${SH.icons[id] || SH.icons.revision}<span>${label}</span>` }))
+    nav.append(SH.h('button', { class: 'nav-btn', dataset: { view: id }, onClick: () => SH.go(id) }, label))
   );
 
   window.studyhelp.onProgress((m) => SH.setProgress?.(m));
   // The saved setting is the source of truth for the theme (localStorage only avoids a flash on startup).
   window.studyhelp.settings.get().then((r) => r.ok && SHTheme.apply(r.data.theme));
-  SH.go('lesson');
+  SH.go('study');
 })(window.SH);

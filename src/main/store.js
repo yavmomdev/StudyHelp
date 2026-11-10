@@ -19,6 +19,16 @@ const DEFAULT_SETTINGS = {
 };
 const GENERAL_KEYS = Object.keys(DEFAULT_SETTINGS).filter((k) => k !== 'activeId');
 
+// The attempt with the highest score ratio, for the progress bars on the home page and history.
+function bestAttempt(attempts) {
+  let best = null;
+  for (const a of attempts || []) {
+    if (!(a.total > 0)) continue;
+    if (!best || a.score / a.total > best.score / best.total) best = { score: a.score, total: a.total };
+  }
+  return best;
+}
+
 function createStore(baseDir, secrets = { encrypt: (s) => s, decrypt: (s) => s }) {
   const itemsDir = path.join(baseDir, 'items');
   const settingsFile = path.join(baseDir, 'settings.json');
@@ -62,6 +72,7 @@ function createStore(baseDir, secrets = { encrypt: (s) => s, decrypt: (s) => s }
           createdAt: it.createdAt,
           meta: it.meta || {},
           attempts: (it.attempts || []).length,
+          best: bestAttempt(it.attempts),
         });
       } catch {
         /* skip corrupt file */
