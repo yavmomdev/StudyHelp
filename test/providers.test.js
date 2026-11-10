@@ -5,6 +5,7 @@ const { detectFromKey, listModels } = require('../src/main/providers');
 test('detects provider from key prefix', () => {
   assert.strictEqual(detectFromKey('sk-ant-api03-abc').id, 'anthropic');
   assert.strictEqual(detectFromKey('AIzaSyABC').id, 'gemini');
+  assert.strictEqual(detectFromKey('AQ.Ab8RN6Lexample').id, 'gemini');
   assert.strictEqual(detectFromKey('gsk_abc').id, 'groq');
   assert.strictEqual(detectFromKey('sk-or-v1-abc').id, 'openrouter');
   assert.strictEqual(detectFromKey('sk-proj-abc').guess, false);

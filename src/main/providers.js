@@ -24,7 +24,7 @@ function detectFromKey(key) {
   const k = String(key || '').trim();
   const hit = (id, guess = false) => ({ ...byId(id), guess });
   if (/^sk-ant-/.test(k)) return hit('anthropic');
-  if (/^AIza/.test(k)) return hit('gemini');
+  if (/^AIza/.test(k) || /^AQ\./.test(k)) return hit('gemini'); // Google keys: AIza... (classic) or AQ.... (newer)
   if (/^gsk_/.test(k)) return hit('groq');
   if (/^sk-or-/.test(k)) return hit('openrouter');
   if (/^csk-/.test(k)) return hit('cerebras');
