@@ -1,5 +1,6 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell, session } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell, session, nativeImage } = require('electron');
+const fs = require('fs');
 const path = require('path');
 const { createStore, THEMES } = require('./store');
 const jobs = require('./jobs');
@@ -19,13 +20,20 @@ const secrets = {
   },
 };
 
-// The window/taskbar icon follows the colour theme (assets/icons/<theme>.png).
+// The window/taskbar icon follows the colour theme (assets/icons/<theme>.png). It is read through fs and
+// turned into an image in memory, which also works when the files are packed inside the installed app.
+const iconCache = {};
 function themeIcon(theme) {
   const t = THEMES.includes(theme) ? theme : 'cloud';
-  return path.join(__dirname, '..', '..', 'assets', 'icons', t + '.png');
+  if (!iconCache[t]) {
+    const img = nativeImage.createFromBuffer(fs.readFileSync(path.join(__dirname, '..', '..', 'assets', 'icons', t + '.png')));
+    iconCache[t] = img.resize({ width: 256, height: 256 });
+  }
+  return iconCache[t];
 }
 function applyIcon(theme) {
-  if (win && !win.isDestroyed()) { try { win.setIcon(themeIcon(theme)); } catch { /* icon is cosmetic */ } }
+  if (!win || win.isDestroyed()) return;
+  try { win.setIcon(themeIcon(theme)); } catch (e) { console.error('icon', e); }
 }
 
 // Window background while the page loads: matches the chosen theme so there is no flash of the wrong colour.
@@ -78,7 +86,10 @@ function handle(channel, fn) {
 // Two copies running at once would overwrite each other's history files: focus the first one instead.
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
-else app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
+else {
+  app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
+  if (process.platform === 'win32') app.setAppUserModelId('dev.yavmom.studyhelp'); // same id as the installer: one taskbar button
+}
 
 app.whenReady().then(() => {
   if (!gotLock) return;
