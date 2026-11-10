@@ -35,7 +35,7 @@
   --ok: #4ade80; --bad: #f43f5e; --warn: #fde047;
   --orb1: #f97316; --orb2: #ec4899; --orb3: #f59e0b; --orb-o: .42; --shadow: none; color-scheme: dark;
 }
-[data-theme="graphite"] { --logo-fg: #10150a;
+[data-theme="graphite"] { --logo-fg: #fff;
   --nav-on: #a3e635; --nav-on-text: #10150a; --t1: #d9f99d; --t2: #a3e635;
   --bg: #0e0f12; --panel: rgba(255,255,255,.05); --panel2: rgba(255,255,255,.09); --line: rgba(255,255,255,.12);
   --text: #f4f4f5; --muted: #a1a1aa; --accent: #a3e635; --accent2: #65a30d; --on-accent: #10150a;
