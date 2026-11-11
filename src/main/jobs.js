@@ -1,6 +1,8 @@
 'use strict';
 // High-level jobs: gather the source -> prompt the model -> normalise -> save to history.
 const { extractFiles, ocrImages } = require('./extract');
+const { fetchLinks } = require('./link');
+const Links = require('../renderer/js/links.js');
 const { completeJSON } = require('./ai');
 const prompts = require('./prompts');
 const { normLesson, normTest, normRevision } = require('./normalize');
@@ -20,17 +22,24 @@ function lessonToText(item) {
 
 // Turns {files:[{path}], text} into prompt-ready {texts, images}. Local models get OCR text instead of images.
 async function gatherSource({ files = [], text = '' }, ctx) {
-  ctx.onProgress?.('Reading your files…');
-  const ex = await extractFiles(files.map((f) => f.path));
+  // Lines of the pasted text that are just a link are opened and read like files.
+  const { links, rest } = Links.split(text);
+  ctx.onProgress?.(links.length ? 'Reading your files and links…' : 'Reading your files…');
+  const [fromFiles, fromLinks] = await Promise.all([extractFiles(files.map((f) => f.path)), fetchLinks(links)]);
+  const ex = {
+    texts: [...fromFiles.texts, ...fromLinks.texts],
+    images: [...fromFiles.images, ...fromLinks.images],
+    warnings: [...fromFiles.warnings, ...fromLinks.warnings],
+  };
   const texts = [...ex.texts];
-  if (text.trim()) texts.push({ name: 'Pasted notes', text: text.trim() });
+  if (rest) texts.push({ name: 'Pasted notes', text: rest });
   let images = ex.images;
   if (images.length && ctx.provider.kind === 'ollama') {
     texts.push(...(await ocrImages(images, ctx.onProgress)));
     images = [];
   }
   if (!texts.length && !images.length) {
-    throw new Error(ex.warnings.join(' ') || 'Add at least one file or paste some text first.');
+    throw new Error(ex.warnings.join(' ') || 'Add at least one file, link or some text first.');
   }
   return { texts, images, warnings: ex.warnings };
 }

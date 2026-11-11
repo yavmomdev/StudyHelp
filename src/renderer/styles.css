@@ -246,3 +246,5 @@ table.data td { padding: 10px 14px; border-top: 1px solid var(--line); vertical-
 .tag.revision { color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, transparent); }
 .drop-sep { height: 18px; }
 .drop .empty { margin: 4px 0; }
+.linknote { color: var(--accent); font-size: 13.5px; margin-top: 8px; text-align: left; }
+.linknote:empty { display: none; }

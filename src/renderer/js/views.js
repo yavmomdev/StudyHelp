@@ -103,7 +103,14 @@
 
     const files = [];
     const chips = h('div', { class: 'chips', style: 'margin-top:14px' });
-    const text = h('textarea', { placeholder: 'Paste notes or text here…', rows: '5' });
+    const text = h('textarea', { placeholder: 'Paste notes here, or a link (web page, PDF, Google Doc shared with "anyone with the link")…', rows: '5' });
+    const linkNote = h('div', { class: 'linknote' });
+    text.addEventListener('input', () => {
+      const { links } = Links.split(text.value);
+      linkNote.textContent = links.length
+        ? `🔗 ${links.length === 1 ? 'Link recognised' : `${links.length} links recognised`}: ${links.map((l) => new URL(l).hostname).join(', ')}. ${links.length === 1 ? 'It' : 'They'} will be opened and read when you create.`
+        : '';
+    });
     const title = h('input', { type: 'text', placeholder: 'Title (optional) — leave empty to let the AI name it' });
     const drawChips = () => chips.replaceChildren(...files.map((f, i) =>
       h('span', { class: 'chip' }, f.name, h('button', { title: 'Remove', onClick: (e) => { e.stopPropagation(); files.splice(i, 1); drawChips(); } }, '×'))));
@@ -115,7 +122,7 @@
       h('div', { class: 'hint' }, 'PDF · Word · photos · text'),
       h('div', { style: 'margin-top:14px' }, h('button', { class: 'btn', onClick: browse }, 'Browse files…')),
       chips,
-      h('details', {}, h('summary', {}, 'or paste text'), text));
+      h('details', {}, h('summary', {}, 'or paste text or a link'), text, linkNote));
     const body = h('div');
     const drop = h('div', { class: 'drop' }, body);
     drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });

@@ -17,7 +17,7 @@ Runs locally as a desktop app (Electron): no server and no account. Your history
 
 | Section | What it does |
 |---|---|
-| **Study** | One home screen. Drag in files (PDF, Word, photos of notes, text) or paste text, pick a mode, and go. **Lesson:** key points to tick off, a structured summary, tables and diagrams where the material suits them, a searchable glossary and a quick check quiz. **Test:** a normal test, flash cards and blurry notes. **From a past lesson:** the same test pack from a lesson you saved. **Analyze my mistakes:** upload a test you already took and get the rules you broke, your mistakes explained, and similar practice questions. |
+| **Study** | One home screen. Drag in files (PDF, Word, photos of notes, text), paste text, or paste a link (a web page, a direct PDF/Word link, or a Google Doc shared with "anyone with the link"), pick a mode, and go. **Lesson:** key points to tick off, a structured summary, tables and diagrams where the material suits them, a searchable glossary and a quick check quiz. **Test:** a normal test, flash cards and blurry notes. **From a past lesson:** the same test pack from a lesson you saved. **Analyze my mistakes:** upload a test you already took and get the rules you broke, your mistakes explained, and similar practice questions. |
 | **Blurry notes** | Your notes with key terms hidden. You fill in one word per sentence. Only terminology is hidden, never verbs or filler words. Later repeats of a hidden word are blurred so they don't give it away. |
 | **Revision** | Pick several saved lessons and/or add revision notes. You get one combined summary and a revision test (normal test, flash cards, blurry notes). |
 | **History** | Every lesson, test and revision with search, filters, best scores, **Select all** and **Delete**. |
@@ -59,6 +59,7 @@ A key shipped inside an app can be extracted by determined users, so use a throw
 - Lessons, tests and history are stored only on your computer, in the app's data folder.
 - API keys are encrypted with your operating system's keychain when it is available, and they never reach the user interface.
 - With a cloud AI, your material is sent to that company to be processed. With Ollama, nothing leaves your computer.
+- Links are opened by the app on your computer. Pages that need a login (private Google Docs, school portals) can't be read, and the app says so: download the file and add it instead.
 - Scanned PDFs have no selectable text: export their pages as images first.
 
 ## Project layout
